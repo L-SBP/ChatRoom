@@ -1,0 +1,5 @@
+PyQt5==5.15.9
+PyQt5-sip==12.11.0
+pyyaml>=6.0           # 配置管理
+qdarkstyle>=3.0       # 深色主题
+python-dotenv>=1.0    # 环境变量
