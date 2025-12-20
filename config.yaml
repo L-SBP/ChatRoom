@@ -1,0 +1,31 @@
+config:
+  app:
+    name: "ChatRoom"
+    version: "1.0.0"
+    description: "A simple chat room"
+
+  ui:
+    windowWidth: 1200
+    windowHeight: 700
+    windowTitle: "Chat Room"
+    windowIcon: "icon.png"
+    windowBackgroundColor: "#FFFFFF"
+
+  server:
+    host: "0.0.0.0"
+    port: 8888
+    max_connections: 100
+    buffer_size: 1024
+
+  client:
+    default_server_host: "127.0.0.1"
+    default_server_port: 8888
+    max_file_size: 10485760  # 10MB
+    timeout: 10
+
+  users:
+    valid_users:
+      admin: "123456"
+      user1: "123456"
+      user2: "123456"
+      test: "123456"
