@@ -7,12 +7,21 @@ class AppConfig(BaseSettings):
     version: str
     description: str
 
+class FontConfig(BaseSettings):
+    family: str
+    titleSize: int
+    subtitleSize: int
+    normalSize: int
+
 class UIConfig(BaseSettings):
     windowWidth: int
     windowHeight: int
+    minWindowWidth: int
+    minWindowHeight: int
     windowTitle: str
     windowIcon: str
     windowBackgroundColor: str
+    font: FontConfig
 
 class ServerConfig(BaseSettings):
     host: str

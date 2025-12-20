@@ -20,13 +20,27 @@ class AppConfig:
 
 
 @dataclass
+class FontConfig:
+    """字体配置"""
+    family: str = "Microsoft YaHei, PingFang SC, WenQuanYi Micro Hei, SimHei, Arial"
+    titleSize: int = 20
+    subtitleSize: int = 14
+    normalSize: int = 12
+
+
+@dataclass
 class UIConfig:
     """UI配置"""
-    windowWidth: int = 1200
-    windowHeight: int = 700
+    windowWidth: int = 1300
+    windowHeight: int = 750
     windowTitle: str = "Chat Room"
     windowIcon: str = "icon.png"
     windowBackgroundColor: str = "#FFFFFF"
+    font: FontConfig = None
+    
+    def __post_init__(self):
+        if self.font is None:
+            self.font = FontConfig()
 
 
 @dataclass
@@ -146,12 +160,23 @@ class BaseConfig:
                 description=data.get('app', {}).get('description', 'A simple chat room')
             )
             
+            ui_font_config = None
+            ui_font_data = data.get('ui', {}).get('font', {})
+            if ui_font_data:
+                ui_font_config = FontConfig(
+                    family=ui_font_data.get('family', 'Microsoft YaHei, PingFang SC, WenQuanYi Micro Hei, SimHei, Arial'),
+                    titleSize=ui_font_data.get('titleSize', 20),
+                    subtitleSize=ui_font_data.get('subtitleSize', 14),
+                    normalSize=ui_font_data.get('normalSize', 12)
+                )
+            
             ui_config = UIConfig(
-                windowWidth=data.get('ui', {}).get('windowWidth', 1200),
-                windowHeight=data.get('ui', {}).get('windowHeight', 700),
+                windowWidth=data.get('ui', {}).get('windowWidth', 1300),
+                windowHeight=data.get('ui', {}).get('windowHeight', 750),
                 windowTitle=data.get('ui', {}).get('windowTitle', 'Chat Room'),
                 windowIcon=data.get('ui', {}).get('windowIcon', 'icon.png'),
-                windowBackgroundColor=data.get('ui', {}).get('windowBackgroundColor', '#FFFFFF')
+                windowBackgroundColor=data.get('ui', {}).get('windowBackgroundColor', '#FFFFFF'),
+                font=ui_font_config
             )
             
             server_config = ServerConfig(
@@ -210,8 +235,8 @@ class ConfigManager:
                         description=config_data.get('app', {}).get('description', 'A simple chat room')
                     ),
                     ui=UIConfig(
-                        windowWidth=config_data.get('ui', {}).get('windowWidth', 1200),
-                        windowHeight=config_data.get('ui', {}).get('windowHeight', 700),
+                        windowWidth=config_data.get('ui', {}).get('windowWidth', 1300),
+                        windowHeight=config_data.get('ui', {}).get('windowHeight', 750),
                         windowTitle=config_data.get('ui', {}).get('windowTitle', 'Chat Room'),
                         windowIcon=config_data.get('ui', {}).get('windowIcon', 'icon.png'),
                         windowBackgroundColor=config_data.get('ui', {}).get('windowBackgroundColor', '#FFFFFF')
