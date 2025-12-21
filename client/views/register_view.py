@@ -276,15 +276,123 @@ class RegisterView(QMainWindow):
 
         # 验证输入
         if not username or not password:
-            QMessageBox.warning(self, "注册失败", "用户名和密码不能为空")
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("注册失败")
+            msg_box.setText("用户名和密码不能为空")
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {client_config.ui.windowBackgroundColor};
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                }}
+                QMessageBox QLabel {{
+                    color: #000000;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                    font-weight: bold;
+                }}
+                QMessageBox QPushButton {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 2px solid #888888;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize + 1}px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }}
+                QMessageBox QPushButton:hover {{
+                    background-color: #e0e0e0;
+                    border: 2px solid #666666;
+                }}
+                QMessageBox QPushButton:pressed {{
+                    background-color: #c0c0c0;
+                    border: 2px solid #444444;
+                }}
+            """)
+            msg_box.exec_()
             return
 
         if len(password) < 6:
-            QMessageBox.warning(self, "注册失败", "密码长度不能少于6位")
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("注册失败")
+            msg_box.setText("密码长度不能少于6位")
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {client_config.ui.windowBackgroundColor};
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                }}
+                QMessageBox QLabel {{
+                    color: #000000;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                    font-weight: bold;
+                }}
+                QMessageBox QPushButton {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 2px solid #888888;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize + 1}px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }}
+                QMessageBox QPushButton:hover {{
+                    background-color: #e0e0e0;
+                    border: 2px solid #666666;
+                }}
+                QMessageBox QPushButton:pressed {{
+                    background-color: #c0c0c0;
+                    border: 2px solid #444444;
+                }}
+            """)
+            msg_box.exec_()
             return
 
         if password != confirm_password:
-            QMessageBox.warning(self, "注册失败", "两次输入的密码不一致")
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("注册失败")
+            msg_box.setText("两次输入的密码不一致")
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {client_config.ui.windowBackgroundColor};
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                }}
+                QMessageBox QLabel {{
+                    color: #000000;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                    font-weight: bold;
+                }}
+                QMessageBox QPushButton {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 2px solid #888888;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize + 1}px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }}
+                QMessageBox QPushButton:hover {{
+                    background-color: #e0e0e0;
+                    border: 2px solid #666666;
+                }}
+                QMessageBox QPushButton:pressed {{
+                    background-color: #c0c0c0;
+                    border: 2px solid #444444;
+                }}
+            """)
+            msg_box.exec_()
             return
 
         # 调用控制器处理注册
@@ -297,13 +405,85 @@ class RegisterView(QMainWindow):
 
     def on_register_success(self, message: str):
         """注册成功处理"""
-        QMessageBox.information(self, "注册成功", message)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("注册成功")
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {client_config.ui.windowBackgroundColor};
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+            }}
+            QMessageBox QLabel {{
+                color: #000000;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+                font-weight: bold;
+            }}
+            QMessageBox QPushButton {{
+                background-color: #f0f0f0;
+                color: #000000;
+                border: 2px solid #888888;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize + 1}px;
+                font-weight: bold;
+                min-width: 100px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: #e0e0e0;
+                border: 2px solid #666666;
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: #c0c0c0;
+                border: 2px solid #444444;
+            }}
+        """)
+        msg_box.exec_()
         self.register_success.emit()
         self.close()
 
     def on_register_failed(self, error_msg: str):
         """注册失败处理"""
-        QMessageBox.warning(self, "注册失败", error_msg)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("注册失败")
+        msg_box.setText(error_msg)
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {client_config.ui.windowBackgroundColor};
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+            }}
+            QMessageBox QLabel {{
+                color: #000000;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+                font-weight: bold;
+            }}
+            QMessageBox QPushButton {{
+                background-color: #f0f0f0;
+                color: #000000;
+                border: 2px solid #888888;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize + 1}px;
+                font-weight: bold;
+                min-width: 100px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: #e0e0e0;
+                border: 2px solid #666666;
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: #c0c0c0;
+                border: 2px solid #444444;
+            }}
+        """)
+        msg_box.exec_()
 
     def closeEvent(self, event):
         """窗口关闭事件"""

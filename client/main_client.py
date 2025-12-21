@@ -103,7 +103,7 @@ class ChatRoomClient:
 
     def on_exit_app(self):
         """处理退出应用"""
-        # 断开网络连接
+        # 完全关闭客户端时才断开网络连接
         self.network_manager.disconnect_from_server()
         self.app.quit()
 
@@ -116,7 +116,7 @@ class ChatRoomClient:
 
     def on_chat_closed(self):
         """聊天窗口关闭时的处理"""
-        # 重新显示登录窗口
+        # 重新显示登录窗口，但保持连接
         self.show_login()
 
 

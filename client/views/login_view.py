@@ -248,7 +248,43 @@ class LoginView(QMainWindow):
         password = self.password_input.text().strip()
         
         if not username or not password:
-            QMessageBox.warning(self, "登录失败", "请输入用户名和密码")
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("登录失败")
+            msg_box.setText("请输入用户名和密码")
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {client_config.ui.windowBackgroundColor};
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                }}
+                QMessageBox QLabel {{
+                    color: #000000;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize}px;
+                    font-weight: bold;
+                }}
+                QMessageBox QPushButton {{
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 2px solid #888888;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-family: {client_config.ui.font.family};
+                    font-size: {client_config.ui.font.normalSize + 1}px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }}
+                QMessageBox QPushButton:hover {{
+                    background-color: #e0e0e0;
+                    border: 2px solid #666666;
+                }}
+                QMessageBox QPushButton:pressed {{
+                    background-color: #c0c0c0;
+                    border: 2px solid #444444;
+                }}
+            """)
+            msg_box.exec_()
             return
             
         # 获取服务器配置
@@ -271,7 +307,43 @@ class LoginView(QMainWindow):
     
     def on_login_failed(self, message: str):
         """处理登录失败"""
-        QMessageBox.warning(self, "登录失败", message)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("登录失败")
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {client_config.ui.windowBackgroundColor};
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+            }}
+            QMessageBox QLabel {{
+                color: #000000;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
+                font-weight: bold;
+            }}
+            QMessageBox QPushButton {{
+                background-color: #f0f0f0;
+                color: #000000;
+                border: 2px solid #888888;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize + 1}px;
+                font-weight: bold;
+                min-width: 100px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: #e0e0e0;
+                border: 2px solid #666666;
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: #c0c0c0;
+                border: 2px solid #444444;
+            }}
+        """)
+        msg_box.exec_()
     
     def closeEvent(self, event):
         """窗口关闭事件"""

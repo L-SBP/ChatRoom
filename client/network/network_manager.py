@@ -211,7 +211,7 @@ class NetworkThread(QThread):
     
     def receive_data(self) -> Optional[list]:
         """从服务器接收数据"""
-        if self.client_socket:
+        if self.client_socket and self.running:
             try:
                 # 接收更多数据
                 chunk = self.client_socket.recv(self.buffer_size)
@@ -250,6 +250,14 @@ class NetworkThread(QThread):
             except socket.timeout:
                 # 超时是正常的，继续下一次循环
                 pass
+            except OSError as e:
+                # 套接字错误，可能是连接已关闭
+                if e.errno == 10038:  # 在一个非套接字上尝试了一个操作
+                    self.connection_status.emit(False, "连接已断开")
+                    self.running = False
+                else:
+                    print(f"套接字错误: {e}")
+                return None
             except Exception as e:
                 print(f"接收数据失败: {e}")
                 # 清空缓冲区以避免持续错误

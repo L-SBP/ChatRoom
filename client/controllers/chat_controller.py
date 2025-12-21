@@ -62,9 +62,16 @@ class ChatController(QObject):
                 self.network_manager.login(username, password)
             return success
     
+    def use_existing_connection(self, username: str) -> bool:
+        """使用现有的连接"""
+        if self.network_manager.is_connected():
+            self.current_user = username
+            return True
+        return False
+    
     def disconnect_from_server(self):
         """断开与服务器的连接"""
-        self.network_manager.disconnect_from_server()
+        # 只是清理本地状态，不关闭网络连接
         self.connected = False
         self.current_user = None
         self.online_users = []

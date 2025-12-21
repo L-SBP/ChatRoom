@@ -306,12 +306,17 @@ class ChatView(QMainWindow):
         central_widget.setLayout(main_layout)
 
     def connect_to_server(self):
-        """连接到服务器"""
-        # 从登录控制器获取当前用户信息
-        # 密码应该通过安全的方式传递，这里简化处理
-        # 实际应用中应该使用加密存储或重新输入密码
-        password = "default_password"  # 临时密码，实际应用中应该改进
-        self.controller.connect_to_server(self.server_host, self.server_port, self.username, password)
+        """使用现有的连接"""
+        # 使用登录控制器建立的现有连接
+        # 不需要重新连接，只需要设置当前用户
+        if self.controller.use_existing_connection(self.username):
+            self.bottom_status.setText("使用现有连接")
+            self.bottom_status.setStyleSheet(
+                "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
+        else:
+            self.bottom_status.setText("连接已断开")
+            self.bottom_status.setStyleSheet(
+                "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
 
     def on_message_received(self, message_obj):
         """处理接收到的消息"""
@@ -404,72 +409,74 @@ class ChatView(QMainWindow):
 
     def closeEvent(self, event):
         """窗口关闭事件"""
-        # 创建自定义的 QMessageBox 并设置样式
+        # 创建自定义QMessageBox
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle('退出')
         msg_box.setText('确定要退出聊天室吗？')
         msg_box.setIcon(QMessageBox.Question)
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.No)
+        msg_box.setWindowFlags(msg_box.windowFlags() & ~Qt.WindowContextHelpButtonHint)  # 去掉帮助按钮
 
-        # 设置对话框样式
-        msg_box.setStyleSheet(f"""
-            QMessageBox {{
-                background-color: {client_config.ui.windowBackgroundColor};
-                font-family: {client_config.ui.font.family};
-                font-size: {client_config.ui.font.normalSize}px;
-            }}
-            QMessageBox QLabel {{
-                color: #000000;
-                font-family: {client_config.ui.font.family};
-                font-size: {client_config.ui.font.normalSize}px;
-            }}
-            QPushButton {{
-                background-color: #f0f0f0;
-                color: #000000;
-                border: 1px solid #aaa;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-family: {client_config.ui.font.family};
-                font-size: {client_config.ui.font.normalSize}px;
-                min-width: 80px;
-            }}
-            QPushButton:hover {{
-                background-color: #e0e0e0;
-            }}
-            QPushButton:pressed {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton {{
-                background-color: #4CAF50;
-                color: white;
+        # 1. 手动创建按钮（指定文本）
+        yes_btn = QPushButton("是")
+        no_btn = QPushButton("否")
+        msg_box.addButton(yes_btn, QMessageBox.YesRole)
+        msg_box.addButton(no_btn, QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_btn)
+
+        # 2. 调整“是”按钮样式（缩小尺寸+字体纯白加粗）
+        yes_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2E7D32; /* 深绿色背景 */
+                color: #FFFFFF !important; /* 强制纯白文字，避免变浅 */
                 border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-weight: bold;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton:hover {{
-                background-color: #45a049;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton:pressed {{
-                background-color: #3d8b40;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton[text="否"] {{
-                background-color: #9E9E9E;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton[text="否"]:hover {{
-                background-color: #757575;
-            }}
-            QPushButton#qt_msgbox_buttonbox QPushButton[text="否"]:pressed {{
-                background-color: #616161;
-            }}
-        """)
+                padding: 8px 16px; /* 缩小内边距，按钮变小 */
+                border-radius: 6px; /* 圆角适中 */
+                font-family: %s;
+                font-size: %dpx; /* 字体大小适中 */
+                font-weight: bold !important; /* 强制加粗，文字更醒目 */
+                min-width: 80px; /* 缩小最小宽度 */
+                min-height: 36px; /* 缩小最小高度 */
+            }
+            QPushButton:hover {
+                background-color: #1B5E20; /* hover加深 */
+            }
+            QPushButton:pressed {
+                background-color: #08330C; /* 按下更暗 */
+            }
+        """ % (client_config.ui.font.family, client_config.ui.font.normalSize + 1))
 
+        # 3. 调整“否”按钮样式（和“是”按钮尺寸一致）
+        no_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #616161; /* 深灰色背景 */
+                color: #FFFFFF !important; /* 强制纯白文字，避免变浅 */
+                border: none;
+                padding: 8px 16px; /* 缩小内边距 */
+                border-radius: 6px; /* 圆角适中 */
+                font-family: %s;
+                font-size: %dpx; /* 字体大小适中 */
+                font-weight: bold !important; /* 强制加粗 */
+                min-width: 80px; /* 缩小最小宽度 */
+                min-height: 36px; /* 缩小最小高度 */
+            }
+            QPushButton:hover {
+                background-color: #424242; /* hover加深 */
+            }
+            QPushButton:pressed {
+                background-color: #212121; /* 按下更暗 */
+            }
+        """ % (client_config.ui.font.family, client_config.ui.font.normalSize + 1))
+
+        # 4. 调整弹窗布局（边距适中）
+        msg_box.layout().setContentsMargins(15, 15, 15, 15)
+        msg_box.layout().setSpacing(10)
+
+        # 执行弹窗
         reply = msg_box.exec_()
 
-        if reply == QMessageBox.Yes:
-            self.controller.disconnect_from_server()
-            self.close_view.emit()
+        if msg_box.clickedButton() == yes_btn:
+            # 直接退出应用
+            QApplication.instance().quit()
             event.accept()
         else:
             event.ignore()

@@ -104,7 +104,7 @@ class LoginController(QObject):
             self.login_failed.emit(f"连接失败: {message}")
             self.is_connecting = False
             self.pending_login_credentials = None
-            # 确保网络管理器断开连接
+            # 连接失败时才断开连接
             self.network_manager.disconnect_from_server()
     
     def get_server_config(self) -> tuple[str, int]:
