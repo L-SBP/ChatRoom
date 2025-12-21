@@ -11,7 +11,10 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QIntValidator
 
 from client.network.network_manager import NetworkManager
-from common.config.config import config
+from common.config.client.config import get_client_config
+
+# 获取客户端配置
+client_config = get_client_config()
 
 
 class ServerConfigView(QMainWindow):
@@ -71,7 +74,7 @@ class ServerConfigView(QMainWindow):
         host_label.setFont(QFont("Microsoft YaHei", 12))
         host_label.setStyleSheet("color: #000000;")
         self.server_host_input = QLineEdit()
-        self.server_host_input.setText(config.client.default_server_host)
+        self.server_host_input.setText(client_config.client.default_server_host)
         self.server_host_input.setFont(QFont("Microsoft YaHei", 12))
         self.server_host_input.setMinimumHeight(36)
         self.server_host_input.setStyleSheet("""
@@ -94,7 +97,7 @@ class ServerConfigView(QMainWindow):
         port_label.setFont(QFont("Microsoft YaHei", 12))
         port_label.setStyleSheet("color: #000000;")
         self.server_port_input = QLineEdit()
-        self.server_port_input.setText(str(config.client.default_server_port))
+        self.server_port_input.setText(str(client_config.client.default_server_port))
         self.server_port_input.setFont(QFont("Microsoft YaHei", 12))
         self.server_port_input.setMinimumHeight(36)
         self.server_port_input.setStyleSheet("""

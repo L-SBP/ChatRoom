@@ -9,7 +9,9 @@ import hashlib
 import base64
 from typing import Tuple
 
-from common.config.config import config
+from common.config import get_server_config
+
+server_config = get_server_config()
 
 
 class PasswordUtils:
@@ -26,7 +28,8 @@ class PasswordUtils:
         Returns:
             str: 配置中的固定盐值
         """
-        return config.security.password_salt
+        # 修复：使用正确的变量名 server_config 而不是 config
+        return server_config.security.password_salt
     
     @staticmethod
     def hash_password(password: str) -> str:

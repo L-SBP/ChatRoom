@@ -1,8 +1,6 @@
 from typing import Dict
 from pydantic_settings import BaseSettings
 
-from common.config import get_server_config
-
 
 class AppConfig(BaseSettings):
     name: str
@@ -27,5 +25,3 @@ class BaseServerConfig(BaseSettings):
     server: ServerConfig
     security: SecurityConfig
     users: UsersConfig
-
-server_config = get_server_config()

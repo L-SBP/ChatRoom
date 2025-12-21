@@ -1,8 +1,6 @@
 from typing import Dict
 from pydantic_settings import BaseSettings
 
-from common.config import get_client_config
-
 
 class AppConfig(BaseSettings):
     name: str
@@ -40,5 +38,3 @@ class BaseClientConfig(BaseSettings):
     ui: UIConfig
     client: ClientConfig
     security: SecurityConfig
-
-client_config = get_client_config("client/config.yaml")

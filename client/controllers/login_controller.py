@@ -11,6 +11,10 @@ from PyQt5.QtCore import QObject, pyqtSignal
 # 使用VO模型和网络管理器
 from client.models.vo import UserVO
 from client.network.network_manager import NetworkManager
+from common.config.client.config import get_client_config
+
+# 获取客户端配置
+client_config = get_client_config()
 
 
 class LoginController(QObject):
@@ -29,16 +33,8 @@ class LoginController(QObject):
         
         # 使用UserVO
         self.current_user: Optional[UserVO] = None
-        self.config_manager = ConfigManager()
-        self._init_default_users()
-        
         self.pending_login_credentials = None
         self.is_connecting = False  # 标记是否正在连接
-    
-    def _init_default_users(self):
-        """初始化默认用户 - 注意这里我们需要调整以适应新的VO模型"""
-        # 在新的架构中，用户验证将在服务端进行，这里只是示例
-        pass
     
     def login(self, username: str, password: str, server_host: str, server_port: int) -> bool:
         """处理用户登录"""
@@ -48,8 +44,9 @@ class LoginController(QObject):
             return False
         
         # 检查是否已经连接
-        if self.network_manager.connected:
+        if self.network_manager.is_connected():
             # 已经连接，直接登录
+            self.pending_login_credentials = (username, password)
             self.network_manager.login(username, password)
         else:
             # 尚未连接，先建立连接
@@ -82,6 +79,7 @@ class LoginController(QObject):
             user_vo = UserVO(
                 user_id="",
                 username=username,
+                password="",  # 不在VO中存储密码
                 display_name=username,
                 status="online"
             )
@@ -102,22 +100,23 @@ class LoginController(QObject):
             username, password = self.pending_login_credentials
             self.network_manager.login(username, password)
         elif not success:
-            self.login_failed.emit(message)
+            # 连接失败，重置状态
+            self.login_failed.emit(f"连接失败: {message}")
             self.is_connecting = False
             self.pending_login_credentials = None
+            # 确保网络管理器断开连接
+            self.network_manager.disconnect_from_server()
     
     def get_server_config(self) -> tuple[str, int]:
         """获取服务器配置"""
-        config = self.config_manager.get_config()
-        return config.client.default_server_host, config.client.default_server_port
+        return client_config.client.default_server_host, client_config.client.default_server_port
     
     def save_server_config(self, host: str, port: int) -> bool:
         """保存服务器配置"""
         try:
-            config = self.config_manager.get_config()
-            config.client.default_server_host = host
-            config.client.default_server_port = port
-            return self.config_manager.save_config()
+            from common.config.client.config import save_server_config
+            save_server_config(host, port)
+            return True
         except Exception as e:
             print(f"保存配置失败: {e}")
             return False

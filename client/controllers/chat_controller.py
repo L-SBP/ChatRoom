@@ -44,18 +44,23 @@ class ChatController(QObject):
         self.online_users = []
     
     def connect_to_server(self, server_host: str, server_port: int, username: str, password: str) -> bool:
-        """连接到服务器"""
+        """连接到服务器并登录"""
         self.server_host = server_host
         self.server_port = server_port
         self.current_user = username
         
-        # 连接到服务器
-        success = self.network_manager.connect_to_server(server_host, server_port)
-        if success:
-            # 连接成功后进行登录
+        # 检查是否已经连接
+        if self.network_manager.is_connected():
+            # 已经连接，直接登录
             self.network_manager.login(username, password)
-        
-        return success
+            return True
+        else:
+            # 尚未连接，先建立连接
+            success = self.network_manager.connect_to_server(server_host, server_port)
+            if success:
+                # 连接成功后进行登录
+                self.network_manager.login(username, password)
+            return success
     
     def disconnect_from_server(self):
         """断开与服务器的连接"""

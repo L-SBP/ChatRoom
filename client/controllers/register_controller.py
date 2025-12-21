@@ -29,6 +29,11 @@ class RegisterController(QObject):
 
     def register(self, username: str, password: str, email: str = "", nickname: str = "") -> bool:
         try:
+            # 检查网络连接状态
+            if not self.network_manager.connected:
+                self.register_failed.emit("未连接到服务器，请检查网络连接")
+                return False
+                
             # 创建新用户VO
             user_vo = UserVO(
                 user_id="",

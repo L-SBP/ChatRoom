@@ -15,8 +15,10 @@ import os
 from client.controllers.chat_controller import ChatController
 # 使用新的VO模型
 from client.models.vo import MessageVO
-from common.config.config import config
 from client.views.Widget.ChatMessageArea import ChatMessageArea
+from common.config import get_client_config
+
+client_config = get_client_config()
 
 
 class ChatView(QMainWindow):
@@ -40,9 +42,9 @@ class ChatView(QMainWindow):
         self.server_port = server_port
         self.username = username
         self.setWindowTitle(f"聊天室 - {username}")
-        self.setMinimumSize(config.ui.minWindowWidth, config.ui.minWindowHeight)
-        self.resize(config.ui.windowWidth, config.ui.windowHeight)
-        self.setStyleSheet(f"background-color: {config.ui.windowBackgroundColor};")
+        self.setMinimumSize(client_config.ui.minWindowWidth, client_config.ui.minWindowHeight)
+        self.resize(client_config.ui.windowWidth, client_config.ui.windowHeight)
+        self.setStyleSheet(f"background-color: {client_config.ui.windowBackgroundColor};")
 
         # 初始化控制器
         self.controller = ChatController()
@@ -73,8 +75,8 @@ class ChatView(QMainWindow):
         # 顶部状态栏
         self.status_bar = QLabel(f"已连接到 {self.server_host}:{self.server_port} | 用户: {self.username}")
         self.status_bar.setStyleSheet(
-            f"background-color: #e0e0e0; padding: 4px 8px; border-bottom: 1px solid #ccc; font-family: {config.ui.font.family}; color: #000000;")
-        self.status_bar.setFont(QFont(config.ui.font.family, config.ui.font.normalSize - 1))
+            f"background-color: #e0e0e0; padding: 4px 8px; border-bottom: 1px solid #ccc; font-family: {client_config.ui.font.family}; color: #000000;")
+        self.status_bar.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 1))
         self.status_bar.setFixedHeight(28)  # 减小状态栏高度
         main_layout.addWidget(self.status_bar)
 
@@ -91,7 +93,7 @@ class ChatView(QMainWindow):
 
         # 聊天标题
         chat_title = QLabel("聊天室")
-        chat_title.setFont(QFont(config.ui.font.family, config.ui.font.titleSize, QFont.Bold))
+        chat_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.titleSize, QFont.Bold))
         chat_title.setStyleSheet("color: #000000; padding: 5px 0;")
         chat_layout.addWidget(chat_title)
 
@@ -108,7 +110,7 @@ class ChatView(QMainWindow):
         # 消息输入框
         self.message_input = QLineEdit()
         self.message_input.setPlaceholderText("请输入消息...")
-        self.message_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.message_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.message_input.returnPressed.connect(self.send_message)
         self.message_input.setMinimumHeight(36)
         self.message_input.setStyleSheet(f"""
@@ -116,8 +118,8 @@ class ChatView(QMainWindow):
                 padding: 8px 12px;  /* 增加内边距，改善视觉效果 */
                 border: 1px solid #aaa;
                 border-radius: 6px;
-                font-family: {config.ui.font.family};
-                font-size: {config.ui.font.normalSize}px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
                 background-color: #ffffff;
                 color: #000000;
             }}
@@ -190,13 +192,13 @@ class ChatView(QMainWindow):
 
         # 用户列表标题
         user_title = QLabel("在线用户")
-        user_title.setFont(QFont(config.ui.font.family, config.ui.font.subtitleSize, QFont.Bold))
+        user_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.subtitleSize, QFont.Bold))
         user_title.setStyleSheet("color: #000000; padding: 8px 0; font-weight: bold;")
         user_layout.addWidget(user_title)
 
         # 用户列表
         self.user_list = QListWidget()
-        self.user_list.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.user_list.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.user_list.setMinimumHeight(300)  # 增加最小高度，显示更多用户
         self.user_list.setMaximumHeight(400)  # 设置最大高度，防止占用过多空间
         self.user_list.setStyleSheet("""
@@ -296,8 +298,8 @@ class ChatView(QMainWindow):
         # 底部状态
         self.bottom_status = QLabel("就绪")
         self.bottom_status.setStyleSheet(
-            "background-color: #e0e0e0; padding: 2px 5px; border-top: 1px solid #ccc; font-family: " + config.ui.font.family + "; color: #000000;")
-        self.bottom_status.setFont(QFont(config.ui.font.family, config.ui.font.normalSize - 2))
+            "background-color: #e0e0e0; padding: 2px 5px; border-top: 1px solid #ccc; font-family: " + client_config.ui.font.family + "; color: #000000;")
+        self.bottom_status.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 2))
         self.bottom_status.setFixedHeight(24)  # 减小底部状态栏高度
         main_layout.addWidget(self.bottom_status)
 
@@ -305,9 +307,10 @@ class ChatView(QMainWindow):
 
     def connect_to_server(self):
         """连接到服务器"""
-        # 这里需要密码，但视图层不应该知道密码
-        # 可以通过配置文件或其他方式获取
-        password = "default_password"  # 临时密码
+        # 从登录控制器获取当前用户信息
+        # 密码应该通过安全的方式传递，这里简化处理
+        # 实际应用中应该使用加密存储或重新输入密码
+        password = "default_password"  # 临时密码，实际应用中应该改进
         self.controller.connect_to_server(self.server_host, self.server_port, self.username, password)
 
     def on_message_received(self, message_obj):
@@ -325,13 +328,13 @@ class ChatView(QMainWindow):
         """处理连接建立成功"""
         self.bottom_status.setText("已连接到服务器")
         self.bottom_status.setStyleSheet(
-            "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + config.ui.font.family + ";")
+            "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
 
     def on_connection_failed(self, message: str):
         """处理连接失败"""
         self.bottom_status.setText(f"连接失败: {message}")
         self.bottom_status.setStyleSheet(
-            "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + config.ui.font.family + ";")
+            "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
 
     def on_file_received(self, filename: str, file_path: str):
         """处理接收到的文件"""
@@ -412,14 +415,14 @@ class ChatView(QMainWindow):
         # 设置对话框样式
         msg_box.setStyleSheet(f"""
             QMessageBox {{
-                background-color: {config.ui.windowBackgroundColor};
-                font-family: {config.ui.font.family};
-                font-size: {config.ui.font.normalSize}px;
+                background-color: {client_config.ui.windowBackgroundColor};
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
             }}
             QMessageBox QLabel {{
                 color: #000000;
-                font-family: {config.ui.font.family};
-                font-size: {config.ui.font.normalSize}px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
             }}
             QPushButton {{
                 background-color: #f0f0f0;
@@ -427,8 +430,8 @@ class ChatView(QMainWindow):
                 border: 1px solid #aaa;
                 padding: 6px 12px;
                 border-radius: 4px;
-                font-family: {config.ui.font.family};
-                font-size: {config.ui.font.normalSize}px;
+                font-family: {client_config.ui.font.family};
+                font-size: {client_config.ui.font.normalSize}px;
                 min-width: 80px;
             }}
             QPushButton:hover {{

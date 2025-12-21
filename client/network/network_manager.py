@@ -34,12 +34,14 @@ class NetworkThread(QThread):
         self.running = False
         self.buffer_size = 1024
         self.username = None
+        self._recv_buffer = b""  # 添加接收缓冲区
         
     def run(self):
         try:
             # 创建TCP连接
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.settimeout(10)
+            # 连接到服务器
             self.client_socket.connect((self.server_host, self.server_port))
             
             self.running = True
@@ -48,15 +50,32 @@ class NetworkThread(QThread):
             # 开始接收消息
             while self.running:
                 try:
-                    data = self.receive_data()
-                    if data:
-                        self.handle_message(data)
+                    datas = self.receive_data()
+                    if datas:
+                        for data in datas:
+                            self.handle_message(data)
                     else:
+                        # 没有数据，可能是连接断开
                         break
                 except socket.timeout:
+                    # 超时，继续循环
                     continue
-                except Exception as e:
+                except ConnectionResetError:
+                    # 连接被重置
+                    self.connection_status.emit(False, "连接被服务器重置")
                     break
+                except OSError as e:
+                    # 套接字错误
+                    self.connection_status.emit(False, f"套接字错误: {str(e)}")
+                    break
+                except Exception as e:
+                    # 其他异常
+                    self.connection_status.emit(False, f"接收数据时出错: {str(e)}")
+                    break
+        except ConnectionRefusedError:
+            self.connection_status.emit(False, "连接被拒绝，请检查服务器是否运行")
+        except socket.timeout:
+            self.connection_status.emit(False, "连接超时，请检查服务器地址和端口")
         except Exception as e:
             self.connection_status.emit(False, f"连接失败: {str(e)}")
         finally:
@@ -170,7 +189,7 @@ class NetworkThread(QThread):
             data = file_vo.to_dict()
             data.update({
                 'type': 'file',
-                'data': file_data.decode('latin-1'),  # 转换为字符串传输
+                'data': file_data.decode('latin-1'),  # 轃换为字符串传输
                 'size': len(file_data)
             })
             
@@ -183,17 +202,99 @@ class NetworkThread(QThread):
     def send_data(self, data: dict):
         """发送数据到服务器"""
         if self.client_socket:
-            json_data = json.dumps(data)
-            self.client_socket.send(json_data.encode('utf-8'))
+            try:
+                json_data = json.dumps(data)
+                self.client_socket.send(json_data.encode('utf-8'))
+            except Exception as e:
+                print(f"发送数据失败: {e}")
+                self.connection_status.emit(False, f"发送数据失败: {str(e)}")
     
-    def receive_data(self) -> Optional[dict]:
+    def receive_data(self) -> Optional[list]:
         """从服务器接收数据"""
         if self.client_socket:
-            data = self.client_socket.recv(self.buffer_size)
-            if data:
-                json_data = data.decode('utf-8')
-                return json.loads(json_data)
+            try:
+                # 接收更多数据
+                chunk = self.client_socket.recv(self.buffer_size)
+                if not chunk:
+                    return None
+                    
+                self._recv_buffer += chunk
+                
+                # 尝试解析缓冲区中的所有完整JSON对象
+                results = []
+                while True:
+                    try:
+                        # 尝试解析当前缓冲区中的数据
+                        decoded_data = self._recv_buffer.decode('utf-8')
+                        
+                        # 尝试找到第一个完整的JSON对象
+                        obj, index = self._extract_json_object(decoded_data)
+                        if obj is not None:
+                            results.append(obj)
+                            # 更新缓冲区，去掉已解析的部分
+                            self._recv_buffer = self._recv_buffer[index:]
+                        else:
+                            # 没有找到完整的JSON对象，退出循环
+                            break
+                    except UnicodeDecodeError:
+                        # 如果解码失败，继续接收更多数据
+                        break
+                    except Exception as e:
+                        print(f"JSON解析失败: {e}")
+                        # 清空缓冲区以避免持续错误
+                        self._recv_buffer = b""
+                        break
+                
+                return results if results else None
+                    
+            except socket.timeout:
+                # 超时是正常的，继续下一次循环
+                pass
+            except Exception as e:
+                print(f"接收数据失败: {e}")
+                # 清空缓冲区以避免持续错误
+                self._recv_buffer = b""
         return None
+    
+    def _extract_json_object(self, text):
+        """从文本中提取第一个完整的JSON对象"""
+        brace_count = 0
+        in_string = False
+        escape_next = False
+        start_index = -1
+        
+        for i, char in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                continue
+                
+            if char == '"':
+                in_string = not in_string
+                continue
+                
+            if not in_string:
+                if char == '{':
+                    if brace_count == 0:
+                        start_index = i
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0 and start_index != -1:
+                        # 找到完整的JSON对象
+                        json_text = text[start_index:i+1]
+                        try:
+                            obj = json.loads(json_text)
+                            return obj, i + 1
+                        except json.JSONDecodeError:
+                            # 如果解析失败，继续查找下一个对象
+                            pass
+        
+        # 没有找到完整的JSON对象
+        return None, 0
     
     def save_file(self, filename: str, file_data: str) -> Optional[str]:
         """保存接收到的文件"""
@@ -233,6 +334,8 @@ class NetworkThread(QThread):
             except:
                 pass
             self.client_socket = None
+        # 清空接收缓冲区
+        self._recv_buffer = b""
 
 
 class NetworkManager(QObject):
@@ -266,6 +369,10 @@ class NetworkManager(QObject):
     
     def connect_to_server(self, server_host: str, server_port: int) -> bool:
         """连接到服务器"""
+        # 如果已有连接，先断开
+        if self.network_thread and self.network_thread.isRunning():
+            self.disconnect_from_server()
+            
         self.server_host = server_host
         self.server_port = server_port
         
@@ -281,10 +388,19 @@ class NetworkManager(QObject):
         
         return True
     
+    def is_connected(self) -> bool:
+        """检查是否已连接"""
+        return (self.network_thread is not None and 
+                self.network_thread.isRunning() and 
+                self.connected)
+    
     def disconnect_from_server(self):
         """断开与服务器的连接"""
         if self.network_thread:
             self.network_thread.close_connection()
+            # 等待线程结束
+            if self.network_thread.isRunning():
+                self.network_thread.wait(3000)  # 最多等待3秒
             self.network_thread = None
         self.connected = False
         self.username = None

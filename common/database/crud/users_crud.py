@@ -13,8 +13,9 @@ class UsersCRUD:
         """
         在数据库创建用户实例
         """
+        log.info(f"开始创建用户")
         user = Users(**kwargs)
-
+        log.info(f"创建用户: {user}")
         try:
             db.add(user)
             await db.commit()

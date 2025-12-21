@@ -5,148 +5,78 @@
 负责登录界面的展示和用户交互
 """
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, \
-    QCheckBox, QApplication
+import sys
+import os
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QPixmap, QIntValidator
 
 from client.controllers.login_controller import LoginController
-from common.config.config import config
+from client.network.network_manager import NetworkManager
+from common.config.client.config import get_client_config
+
+# 获取客户端配置
+client_config = get_client_config()
 
 
 class LoginView(QMainWindow):
     """登录视图类"""
-
-    server_input = None
-    port_input = None
-    username_input = None
-    password_input = None
-
-    remember_checkbox = None
-    login_btn = None
-    register_btn = None
-    cancel_btn = None
-
+    
     # 信号定义
     login_success = pyqtSignal(str)  # 登录成功信号，参数为用户名
-    show_register = pyqtSignal()  # 显示注册界面信号
-    exit_app = pyqtSignal()  # 退出应用信号
-
+    show_register = pyqtSignal()     # 显示注册界面信号
+    exit_app = pyqtSignal()          # 退出应用信号
+    
     def __init__(self):
         super().__init__()
-        self.controller = LoginController()
-        self.setWindowTitle("用户登录")
-        self.setFixedSize(600, 600)  # 增加窗口尺寸，提供更多空间
-        self.center_window()
-        self.setStyleSheet(f"background-color: {config.ui.windowBackgroundColor};")
+        self.login_controller = LoginController()
+        self.login_controller.login_success.connect(self.on_login_success)
+        self.login_controller.login_failed.connect(self.on_login_failed)
+        self.network_manager = NetworkManager()  # 获取网络管理器实例
+        
         self.init_ui()
-        self.connect_signals()
-        self.load_server_config()
-
-    def center_window(self):
-        """居中窗口"""
-        qr = self.frameGeometry()
-        cp = QApplication.desktop().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
-
+        self.setup_connections()
+        self.start_connection_status_check()
+        
     def init_ui(self):
         """初始化用户界面"""
+        self.setWindowTitle(client_config.ui.windowTitle + " - 登录")
+        self.setFixedSize(500, 400)
+        self.center_window()
+        self.setStyleSheet(f"background-color: {client_config.ui.windowBackgroundColor};")
+        
         # 主窗口设置
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
+        
         # 布局
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(5)  # 增加间距，避免拥挤
-        main_layout.setContentsMargins(50, 50, 50, 50)  # 增加边距，改善视觉效果
-
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(50, 50, 50, 50)
+        
         # 标题
-        title_label = QLabel("聊天室登录")
-        title_label.setFont(QFont(config.ui.font.family, config.ui.font.titleSize + 2, QFont.Bold))  # 增大标题字体
+        title_label = QLabel("用户登录")
+        title_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.titleSize, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: #000000; margin-bottom: 20px; font-weight: bold;")  # 增加底部间距
+        title_label.setStyleSheet("color: #000000; margin-bottom: 20px; font-weight: bold;")
         main_layout.addWidget(title_label)
-
-        # 服务器配置
-        server_group_layout = QVBoxLayout()
-        server_group_layout.setSpacing(10)  # 增加间距
-
-        server_title = QLabel("服务器配置")
-        server_title.setFont(QFont(config.ui.font.family, config.ui.font.subtitleSize + 1, QFont.Bold))  # 增大标题字体
-        server_title.setStyleSheet("color: #000000; margin: 8px 0; font-weight: bold;")  # 增加间距和字体粗细
-        server_group_layout.addWidget(server_title)
-
-        # 服务器地址
-        server_layout = QHBoxLayout()
-        server_label = QLabel("服务器地址:")
-        server_label.setFixedWidth(120)  # 增加标签宽度
-        server_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        server_label.setStyleSheet("color: #000000;")
-        self.server_input = QLineEdit()
-        self.server_input.setPlaceholderText("服务器IP地址，如：127.0.0.1")
-        self.server_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        self.server_input.setMinimumHeight(36)  # 增加输入框高度
-        self.server_input.setStyleSheet("""
-            QLineEdit {
-                padding: 8px 12px;  /* 增加内边距 */
-                border: 1px solid #aaa;
-                border-radius: 6px;
-                background-color: #ffffff;
-                color: #000000;
-            }
-        """)
-        server_layout.addWidget(server_label)
-        server_layout.addWidget(self.server_input)
-        server_group_layout.addLayout(server_layout)
-
-        # 端口号
-        port_layout = QHBoxLayout()
-        port_label = QLabel("端口号:")
-        port_label.setFixedWidth(120)  # 增加标签宽度
-        port_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        port_label.setStyleSheet("color: #000000;")
-        self.port_input = QLineEdit()
-        self.port_input.setPlaceholderText("服务器端口号，如：8888")
-        self.port_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        self.port_input.setMinimumHeight(36)  # 增加输入框高度
-        self.port_input.setStyleSheet("""
-            QLineEdit {
-                padding: 6px 12px;  /* 增加内边距 */
-                border: 1px solid #aaa;
-                border-radius: 6px;
-                background-color: #ffffff;
-                color: #000000;
-            }
-        """)
-        port_layout.addWidget(port_label)
-        port_layout.addWidget(self.port_input)
-        server_group_layout.addLayout(port_layout)
-
-        main_layout.addLayout(server_group_layout)
-
-        # 用户认证
-        auth_group_layout = QVBoxLayout()
-        auth_group_layout.setSpacing(10)  # 增加间距
-
-        auth_title = QLabel("用户认证")
-        auth_title.setFont(QFont(config.ui.font.family, config.ui.font.subtitleSize + 1, QFont.Bold))  # 增大标题字体
-        auth_title.setStyleSheet("color: #000000; margin: 8px 0; font-weight: bold;")  # 增加间距和字体粗细
-        auth_group_layout.addWidget(auth_title)
-
+        
         # 用户名
         username_layout = QHBoxLayout()
         username_label = QLabel("用户名:")
-        username_label.setFixedWidth(120)
-        username_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        username_label.setFixedWidth(80)
+        username_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         username_label.setStyleSheet("color: #000000;")
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("请输入用户名")
-        self.username_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.username_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.username_input.setMinimumHeight(36)
         self.username_input.setStyleSheet("""
             QLineEdit {
-                padding: 6px 12px;  /* 增加内边距 */
+                padding: 6px 12px;
                 border: 1px solid #aaa;
                 border-radius: 6px;
                 background-color: #ffffff;
@@ -155,22 +85,21 @@ class LoginView(QMainWindow):
         """)
         username_layout.addWidget(username_label)
         username_layout.addWidget(self.username_input)
-        auth_group_layout.addLayout(username_layout)
-
+        main_layout.addLayout(username_layout)
+        
         # 密码
         password_layout = QHBoxLayout()
         password_label = QLabel("密码:")
-        password_label.setFixedWidth(120)
-        password_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        password_label.setFixedWidth(80)
+        password_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         password_label.setStyleSheet("color: #000000;")
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("请输入密码")
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.password_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.password_input.setMinimumHeight(36)
         self.password_input.setStyleSheet("""
             QLineEdit {
-                padding: 6px 12px;  /* 增加内边距 */
+                padding: 6px 12px;
                 border: 1px solid #aaa;
                 border-radius: 6px;
                 background-color: #ffffff;
@@ -179,23 +108,28 @@ class LoginView(QMainWindow):
         """)
         password_layout.addWidget(password_label)
         password_layout.addWidget(self.password_input)
-        auth_group_layout.addLayout(password_layout)
-
-        # 记住密码
-        self.remember_checkbox = QCheckBox("记住密码")
-        self.remember_checkbox.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        self.remember_checkbox.setStyleSheet("color: #000000; margin-left: 120px;")  # 与输入框对齐
-        auth_group_layout.addWidget(self.remember_checkbox)
-
-        main_layout.addLayout(auth_group_layout)
-
+        main_layout.addLayout(password_layout)
+        
+        # 连接状态标签
+        self.connection_status_label = QLabel("连接状态: 未连接")
+        self.connection_status_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
+        self.connection_status_label.setAlignment(Qt.AlignCenter)
+        self.connection_status_label.setStyleSheet("""
+            QLabel {
+                color: #ff0000;
+                padding: 5px;
+                border-radius: 5px;
+                background-color: #f0f0f0;
+            }
+        """)
+        main_layout.addWidget(self.connection_status_label)
+        
         # 按钮布局
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(20)  # 增加按钮间距
-
+        button_layout.setSpacing(15)
+        
         self.login_btn = QPushButton("登录")
-        self.login_btn.setFixedHeight(40)  # 增加按钮高度
-        self.login_btn.setMinimumWidth(120)  # 增加按钮宽度
+        self.login_btn.setFixedHeight(40)
         self.login_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -203,8 +137,8 @@ class LoginView(QMainWindow):
                 border: none;
                 border-radius: 6px;
                 font-weight: bold;
-                font-size: 16px;  /* 增大字体 */
-                padding: 12px 20px;
+                font-size: 14px;
+                padding: 10px 16px;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -213,10 +147,9 @@ class LoginView(QMainWindow):
                 background-color: #3d8b40;
             }
         """)
-
+        
         self.register_btn = QPushButton("注册")
-        self.register_btn.setFixedHeight(40)  # 增加按钮高度
-        self.register_btn.setMinimumWidth(120)  # 增加按钮宽度
+        self.register_btn.setFixedHeight(40)
         self.register_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -224,8 +157,8 @@ class LoginView(QMainWindow):
                 border: none;
                 border-radius: 6px;
                 font-weight: bold;
-                font-size: 16px;  /* 增大字体 */
-                padding: 12px 20px;
+                font-size: 14px;
+                padding: 10px 16px;
             }
             QPushButton:hover {
                 background-color: #1976D2;
@@ -234,19 +167,18 @@ class LoginView(QMainWindow):
                 background-color: #0D47A1;
             }
         """)
-
-        self.cancel_btn = QPushButton("退出")
-        self.cancel_btn.setFixedHeight(40)  # 增加按钮高度
-        self.cancel_btn.setMinimumWidth(120)  # 增加按钮宽度
-        self.cancel_btn.setStyleSheet("""
+        
+        self.exit_btn = QPushButton("退出")
+        self.exit_btn.setFixedHeight(40)
+        self.exit_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f44336;
                 color: white;
                 border: none;
                 border-radius: 6px;
                 font-weight: bold;
-                font-size: 16px;  /* 增大字体 */
-                padding: 12px 20px;
+                font-size: 14px;
+                padding: 10px 16px;
             }
             QPushButton:hover {
                 background-color: #d32f2f;
@@ -255,65 +187,92 @@ class LoginView(QMainWindow):
                 background-color: #b71c1c;
             }
         """)
-
+        
         button_layout.addWidget(self.login_btn)
         button_layout.addWidget(self.register_btn)
-        button_layout.addWidget(self.cancel_btn)
-
+        button_layout.addWidget(self.exit_btn)
         main_layout.addLayout(button_layout)
-
-        # 底部提示
-        tip_label = QLabel("提示：首次使用请先注册账户")
-        tip_label.setAlignment(Qt.AlignCenter)
-        tip_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
-        tip_label.setStyleSheet("color: #000000; margin-top: 20px; font-style: italic;")  # 增加间距和斜体
-        main_layout.addWidget(tip_label)
-
+        
         central_widget.setLayout(main_layout)
-
-    def connect_signals(self):
-        """连接信号和槽"""
+    
+    def center_window(self):
+        """居中窗口"""
+        screen = self.screen().availableGeometry()
+        size = self.geometry()
+        self.move(
+            (screen.width() - size.width()) // 2,
+            (screen.height() - size.height()) // 2
+        )
+    
+    def setup_connections(self):
+        """设置信号与槽连接"""
         self.login_btn.clicked.connect(self.on_login)
         self.register_btn.clicked.connect(self.on_register)
-        self.cancel_btn.clicked.connect(self.on_cancel)
-
-        # 连接控制器信号
-        self.controller.login_success.connect(self.on_login_success)
-        self.controller.login_failed.connect(self.on_login_failed)
-
-    def load_server_config(self):
-        """加载服务器配置"""
-        host, port = self.controller.get_server_config()
-        self.server_input.setText(host)
-        self.port_input.setText(str(port))
-
+        self.exit_btn.clicked.connect(self.on_exit)
+        self.username_input.returnPressed.connect(self.on_login)
+        self.password_input.returnPressed.connect(self.on_login)
+        self.network_manager.connection_status.connect(self.on_connection_status_changed)
+    
+    def start_connection_status_check(self):
+        """开始连接状态检查"""
+        # 初始化时尝试连接默认服务器
+        host, port = self.login_controller.get_server_config()
+        self.network_manager.connect_to_server(host, port)
+    
+    def on_connection_status_changed(self, connected: bool, message: str):
+        """处理连接状态改变"""
+        if connected:
+            self.connection_status_label.setText(f"连接状态: 已连接 ({message})")
+            self.connection_status_label.setStyleSheet("""
+                QLabel {
+                    color: #008000;
+                    padding: 5px;
+                    border-radius: 5px;
+                    background-color: #f0f0f0;
+                }
+            """)
+        else:
+            self.connection_status_label.setText(f"连接状态: 未连接 ({message})")
+            self.connection_status_label.setStyleSheet("""
+                QLabel {
+                    color: #ff0000;
+                    padding: 5px;
+                    border-radius: 5px;
+                    background-color: #f0f0f0;
+                }
+            """)
+    
     def on_login(self):
         """处理登录按钮点击"""
         username = self.username_input.text().strip()
         password = self.password_input.text().strip()
-        server = self.server_input.text().strip()
-        port = self.port_input.text().strip()
-
-        # 调用控制器处理登录
-        self.controller.login(username, password, server, port)
-
+        
+        if not username or not password:
+            QMessageBox.warning(self, "登录失败", "请输入用户名和密码")
+            return
+            
+        # 获取服务器配置
+        server_host, server_port = self.login_controller.get_server_config()
+        
+        # 调用控制器进行登录
+        self.login_controller.login(username, password, server_host, server_port)
+    
     def on_register(self):
         """处理注册按钮点击"""
         self.show_register.emit()
-
-    def on_cancel(self):
-        """处理取消按钮点击"""
+    
+    def on_exit(self):
+        """处理退出按钮点击"""
         self.exit_app.emit()
-
+    
     def on_login_success(self, username: str):
-        """登录成功处理"""
+        """处理登录成功"""
         self.login_success.emit(username)
-        self.hide()
-
-    def on_login_failed(self, error_msg: str):
-        """登录失败处理"""
-        QMessageBox.warning(self, "登录失败", error_msg)
-
+    
+    def on_login_failed(self, message: str):
+        """处理登录失败"""
+        QMessageBox.warning(self, "登录失败", message)
+    
     def closeEvent(self, event):
         """窗口关闭事件"""
         self.exit_app.emit()

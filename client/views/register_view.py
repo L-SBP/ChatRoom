@@ -12,8 +12,10 @@ from PyQt5.QtGui import QFont
 
 # 使用新的注册控制器
 from client.controllers.register_controller import RegisterController
-from common.config.config import config
+from client.views.login_view import client_config
+from common.config import get_client_config
 
+client_config = get_client_config()
 
 class RegisterView(QMainWindow):
     """注册视图类"""
@@ -38,7 +40,7 @@ class RegisterView(QMainWindow):
         self.setWindowTitle("用户注册")
         self.setFixedSize(600, 600)  # 增加窗口尺寸，提供更多空间
         self.center_window()
-        self.setStyleSheet(f"background-color: {config.ui.windowBackgroundColor};")
+        self.setStyleSheet(f"background-color: {client_config.ui.windowBackgroundColor};")
         self.init_ui()
         self.connect_signals()
 
@@ -62,7 +64,7 @@ class RegisterView(QMainWindow):
 
         # 标题
         title_label = QLabel("用户注册")
-        title_label.setFont(QFont(config.ui.font.family, config.ui.font.titleSize + 2, QFont.Bold))  # 增大标题字体
+        title_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.titleSize + 2, QFont.Bold))  # 增大标题字体
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("color: #000000; margin-bottom: 20px; font-weight: bold;")  # 增加底部间距
         main_layout.addWidget(title_label)
@@ -72,7 +74,7 @@ class RegisterView(QMainWindow):
         user_group_layout.setSpacing(10)  # 保持间距
 
         user_title = QLabel("用户信息")
-        user_title.setFont(QFont(config.ui.font.family, config.ui.font.subtitleSize + 1, QFont.Bold))  # 增大标题字体
+        user_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.subtitleSize + 1, QFont.Bold))  # 增大标题字体
         user_title.setStyleSheet("color: #000000; margin: 8px 0; font-weight: bold;")  # 增加间距和字体粗细
         user_group_layout.addWidget(user_title)
 
@@ -80,11 +82,11 @@ class RegisterView(QMainWindow):
         username_layout = QHBoxLayout()
         username_label = QLabel("用户名:")
         username_label.setFixedWidth(120)  # 增加标签宽度
-        username_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        username_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         username_label.setStyleSheet("color: #000000;")
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("请输入用户名")
-        self.username_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.username_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.username_input.setMinimumHeight(36)  # 增加输入框高度
         self.username_input.setStyleSheet("""
             QLineEdit {
@@ -103,12 +105,12 @@ class RegisterView(QMainWindow):
         password_layout = QHBoxLayout()
         password_label = QLabel("密码:")
         password_label.setFixedWidth(120)  # 增加标签宽度
-        password_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        password_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         password_label.setStyleSheet("color: #000000;")
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("请输入密码（至少6位）")
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.password_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.password_input.setMinimumHeight(36)  # 增加输入框高度
         self.password_input.setStyleSheet("""
             QLineEdit {
@@ -127,12 +129,12 @@ class RegisterView(QMainWindow):
         confirm_layout = QHBoxLayout()
         confirm_label = QLabel("确认密码:")
         confirm_label.setFixedWidth(120)  # 增加标签宽度
-        confirm_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        confirm_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         confirm_label.setStyleSheet("color: #000000;")
         self.confirm_input = QLineEdit()
         self.confirm_input.setPlaceholderText("请再次输入密码")
         self.confirm_input.setEchoMode(QLineEdit.Password)
-        self.confirm_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.confirm_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.confirm_input.setMinimumHeight(36)  # 增加输入框高度
         self.confirm_input.setStyleSheet("""
             QLineEdit {
@@ -151,11 +153,11 @@ class RegisterView(QMainWindow):
         email_layout = QHBoxLayout()
         email_label = QLabel("邮箱:")
         email_label.setFixedWidth(120)  # 增加标签宽度
-        email_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        email_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         email_label.setStyleSheet("color: #000000;")
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText("请输入邮箱（可选）")
-        self.email_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.email_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.email_input.setMinimumHeight(36)  # 增加输入框高度
         self.email_input.setStyleSheet("""
             QLineEdit {
@@ -174,11 +176,11 @@ class RegisterView(QMainWindow):
         nickname_layout = QHBoxLayout()
         nickname_label = QLabel("昵称:")
         nickname_label.setFixedWidth(120)  # 增加标签宽度
-        nickname_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        nickname_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         nickname_label.setStyleSheet("color: #000000;")
         self.nickname_input = QLineEdit()
         self.nickname_input.setPlaceholderText("请输入昵称（可选）")
-        self.nickname_input.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        self.nickname_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         self.nickname_input.setMinimumHeight(36)  # 增加输入框高度
         self.nickname_input.setStyleSheet("""
             QLineEdit {
@@ -249,7 +251,7 @@ class RegisterView(QMainWindow):
         # 底部提示
         tip_label = QLabel("提示：用户名和密码不能为空，密码长度不能少于6位")
         tip_label.setAlignment(Qt.AlignCenter)
-        tip_label.setFont(QFont(config.ui.font.family, config.ui.font.normalSize))
+        tip_label.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
         tip_label.setStyleSheet("color: #000000; margin-top: 20px; font-style: italic;")  # 增加间距和斜体
         main_layout.addWidget(tip_label)
 
