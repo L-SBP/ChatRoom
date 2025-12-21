@@ -1,21 +1,38 @@
+# backend/app/core/log.py
+
 import sys
 from functools import lru_cache
-
 from loguru import logger
 
 from common.config.profile import Profile
 
 
 class LogHelper:
-    def __init__(self, log_file: str = "logs"):
-        self.logger = logger
+    """
+    日志系统辅助类。
 
+    用于配置和管理应用的日志记录器，支持控制台和文件输出。
+    """
+
+    def __init__(self, log_file_name: str = "log"):
+        """
+        初始化日志配置。
+
+        配置日志记录器，移除默认处理器，添加控制台和文件处理器，设置日志格式和轮转策略。
+
+        Args:
+            log_file_name (str): 日志文件名前缀，默认为 "log"。
+        """
+        # 初始化日志记录器
+        self.logger = logger
+        # 移除所有已有的日志处理器，情况日志设置
         self.logger.remove()
 
-        project_root = Profile.get_project_root()
-        log_file_path = project_root / log_file
+        # 使用Profile获取项目根目录
+        # 确保日志目录存在,如果不存在就创建
+        log_file_path = Profile.get_project_root() / "logs"
         log_file_path.mkdir(parents=True, exist_ok=True)
-        log_file_path = log_file_path / f"{log_file}.log"
+        log_file_path = log_file_path / f"{log_file_name}.log"
 
         # 定义日志输出的基本格式
         formatter = (
@@ -46,8 +63,18 @@ class LogHelper:
 
     @lru_cache()
     def get_logger(self):
+        """
+        获取日志记录器实例。
+
+        使用 LRU 缓存以确保单例模式。
+
+        Returns:
+            logger: loguru 日志记录器实例。
+        """
         return self.logger
 
 
+# 创建LogHelper 实例
 log_helper = LogHelper()
+# 获取日志记录器
 log = log_helper.get_logger()

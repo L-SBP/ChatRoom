@@ -7,7 +7,7 @@ class Profile:
         current_path = Path(__file__)
 
         for parent in current_path.parents:
-            if (parent / "config.yaml").exists():
+            if (parent / "client" / "config.yaml").exists() or (parent / "server" / "config.yaml").exists():
                 return parent
 
         return current_path.parent.parent

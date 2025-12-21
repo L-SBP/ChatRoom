@@ -1,0 +1,28 @@
+config:
+  app:
+    name: "ChatRoom"
+    version: "1.0.0"
+    description: "A simple chat room"
+
+  ui:
+    windowWidth: 1100      # 聊天窗口初始宽度 - 适中尺寸
+    windowHeight: 650      # 聊天窗口初始高度 - 减小高度
+    minWindowWidth: 1000   # 最小宽度 - 保持合理最小值
+    minWindowHeight: 600   # 最小高度 - 减小最小高度
+    windowTitle: "聊天室"  # 中文标题更友好
+    windowIcon: ""        # 窗口图标路径
+    windowBackgroundColor: "#f0f2f5"  # 统一浅灰背景
+    font:
+      family: "Microsoft YaHei, PingFang SC, SimHei"  # 简化字体列表，优先中文字体
+      titleSize: 22
+      subtitleSize: 15
+      normalSize: 13
+
+  client:
+    default_server_host: "127.0.0.1"
+    default_server_port: 8888
+    max_file_size: 10485760  # 10MB
+    timeout: 10
+
+  security:
+    password_salt: "ChatRoom_Salt_Value_For_Password_Hashing_2025"
