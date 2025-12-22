@@ -1,4 +1,4 @@
-from sqlalchemy import Column, UUID, VARCHAR, TEXT, Boolean, DateTime, func, ForeignKey, CheckConstraint
+from sqlalchemy import Column, UUID, VARCHAR, TEXT, Boolean, DateTime, func, ForeignKey, CheckConstraint, BigInteger
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -22,7 +22,7 @@ class GlobalMessage(BaseModel):
     user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.user_id", ondelete="SET NULL"),
-        nullable=False
+        nullable=True  # 修改为允许为空
     )
 
     content_type = Column(
@@ -36,7 +36,7 @@ class GlobalMessage(BaseModel):
 
     file_name = Column(VARCHAR(255))
 
-    file_size = Column(TEXT)  # BIGINT在SQLAlchemy中映射为TEXT
+    file_size = Column(BigInteger)  # 修改为BigInteger类型
 
     metadata_ = Column("metadata", JSONB)
 
@@ -62,3 +62,6 @@ class GlobalMessage(BaseModel):
 
     # 关系
     user = relationship("Users", foreign_keys=[user_id])
+
+    class Config:
+        from_attributes = True

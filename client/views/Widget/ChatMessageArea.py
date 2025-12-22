@@ -59,7 +59,7 @@ class ChatMessageArea(QWidget):
         # 从VO中提取信息
         sender = getattr(message_vo, 'username', '未知用户')
         content = getattr(message_vo, 'content', '[无内容]')
-        is_self = sender == "我"  # 判断是否为自己发送的消息
+        is_self = False  # 默认不是自己发送的消息
         
         # 气泡样式CSS
         if is_self:

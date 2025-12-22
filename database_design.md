@@ -85,7 +85,7 @@ COMMENT ON TABLE public.files IS '用户上传文件信息表';
 -- =============================================
 CREATE TABLE public.global_messages (
     message_id uuid DEFAULT gen_random_uuid() NOT NULL COMMENT '消息唯一ID（主键）',
-    user_id uuid NOT NULL COMMENT '发送用户ID（关联users表）',
+    user_id uuid COMMENT '发送用户ID（关联users表）',
     content_type character varying(20) DEFAULT 'text'::character varying COMMENT '消息类型：text/image/video/file/audio/system',
     content text COMMENT '文本消息内容',
     file_url text COMMENT '文件消息URL（关联files表）',

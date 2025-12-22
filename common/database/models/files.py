@@ -64,3 +64,6 @@ class File(BaseModel):
 
     # 关系
     user = relationship("Users", foreign_keys=[user_id])
+
+    class Config:
+        from_attributes = True

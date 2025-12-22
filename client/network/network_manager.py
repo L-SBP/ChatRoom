@@ -85,18 +85,26 @@ class NetworkThread(QThread):
         """处理接收到的消息"""
         msg_type = data.get('type')
         
-        if msg_type == 'message':
+        if msg_type in ['text', 'image', 'video', 'file', 'audio']:
             username = data.get('username', '')
-            message = data.get('message', '')
+            content = data.get('content', '')
+            content_type = msg_type
             timestamp = data.get('timestamp', time.time())
+            
+            # 确保timestamp是数值类型
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = float(timestamp)
+                except ValueError:
+                    timestamp = time.time()
             
             # 创建消息VO对象用于界面展示
             message_vo = MessageVO(
                 message_id=data.get('message_id', ''),
                 user_id=data.get('user_id', ''),
                 username=username,
-                content_type="text",
-                content=message,
+                content_type=content_type,
+                content=content,
                 created_at=datetime.fromtimestamp(timestamp) if timestamp else None
             )
             
@@ -106,10 +114,40 @@ class NetworkThread(QThread):
             users = data.get('users', [])
             self.user_list_updated.emit(users)
             
+        elif msg_type == 'system':
+            # 处理系统消息
+            message = data.get('message', '')
+            timestamp = data.get('timestamp', time.time())
+            
+            # 确保timestamp是数值类型
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = float(timestamp)
+                except ValueError:
+                    timestamp = time.time()
+            
+            # 创建系统消息VO对象
+            message_vo = MessageVO(
+                message_id="",
+                user_id="",
+                username="系统",
+                content_type="system",
+                content=message,
+                created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+            )
+            
+            self.message_received.emit(message_vo)
+            
         elif msg_type == 'file':
             filename = data.get('filename', '')
             file_data = data.get('data', '')
+            # 确保file_size是整数类型
             file_size = data.get('size', 0)
+            if isinstance(file_size, str):
+                try:
+                    file_size = int(file_size)
+                except ValueError:
+                    file_size = 0
             
             # 保存文件
             file_path = self.save_file(filename, file_data)
@@ -152,7 +190,7 @@ class NetworkThread(QThread):
         if self.client_socket and self.running:
             # 将VO对象转换为字典进行传输
             data = message_vo.to_dict()
-            data['type'] = 'message'  # 添加消息类型标识
+            data['type'] = message_vo.content_type  # 使用content_type作为type字段
             
             self.send_data(data)
             return True
@@ -181,7 +219,7 @@ class NetworkThread(QThread):
                 file_name=filename,
                 file_url="",  # 会在服务端生成
                 file_type="file",
-                file_size=len(file_data),
+                file_size=len(file_data),  # 确保是整数类型
                 created_at=datetime.now()
             )
             
@@ -189,8 +227,8 @@ class NetworkThread(QThread):
             data = file_vo.to_dict()
             data.update({
                 'type': 'file',
-                'data': file_data.decode('latin-1'),  # 轃换为字符串传输
-                'size': len(file_data)
+                'data': file_data.decode('latin-1'),  # 转换为字符串传输
+                'size': len(file_data)  # 确保是整数类型
             })
             
             self.send_data(data)

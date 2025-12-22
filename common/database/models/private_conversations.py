@@ -65,3 +65,6 @@ class PrivateConversation(BaseModel):
     user1 = relationship("Users", foreign_keys=[user1_id])
     user2 = relationship("Users", foreign_keys=[user2_id])
     last_message = relationship("PrivateMessage", foreign_keys=[last_message_id])
+
+    class Config:
+        from_attributes = True

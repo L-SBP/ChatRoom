@@ -50,3 +50,6 @@ class Users(BaseModel):
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp()
     )
+
+    class Config:
+        from_attributes = True

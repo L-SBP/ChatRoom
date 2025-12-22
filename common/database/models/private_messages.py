@@ -78,3 +78,6 @@ class PrivateMessage(BaseModel):
     # 关系
     sender = relationship("Users", foreign_keys=[sender_id])
     receiver = relationship("Users", foreign_keys=[receiver_id])
+
+    class Config:
+        from_attributes = True

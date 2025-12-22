@@ -28,7 +28,7 @@ class UsersCRUD:
             raise e
 
     @staticmethod
-    async def get_by_username(db: AsyncSession, username: str):
+    async def get_by_username(db: AsyncSession, username: str) -> Users:
         """
         根据用户名获取用户实例
         """

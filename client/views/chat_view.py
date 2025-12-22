@@ -321,7 +321,11 @@ class ChatView(QMainWindow):
     def on_message_received(self, message_obj):
         """处理接收到的消息"""
         # 直接传递对象给消息区域显示
-        self.message_area.add_message(message_obj)
+        if message_obj.content_type == "system":
+            # 处理系统消息
+            self.add_system_message(message_obj.content)
+        else:
+            self.message_area.add_message(message_obj)
 
     def on_user_list_updated(self, users: list):
         """处理用户列表更新"""
