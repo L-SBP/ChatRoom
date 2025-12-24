@@ -307,25 +307,54 @@ class ChatView(QMainWindow):
 
     def connect_to_server(self):
         """使用现有的连接"""
-        # 使用登录控制器建立的现有连接
-        # 不需要重新连接，只需要设置当前用户
         if self.controller.use_existing_connection(self.username):
-            self.bottom_status.setText("使用现有连接")
+            self.bottom_status.setText(f"已连接 - 用户: {self.username}")
             self.bottom_status.setStyleSheet(
                 "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
+            # 添加连接成功的系统消息
+            self.add_system_message(f"✓ 已连接到聊天室，欢迎 {self.username}！")
         else:
             self.bottom_status.setText("连接已断开")
             self.bottom_status.setStyleSheet(
                 "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
+            self.add_system_message("✗ 连接失败，请检查网络连接")
 
     def on_message_received(self, message_obj):
         """处理接收到的消息"""
-        # 直接传递对象给消息区域显示
-        if message_obj.content_type == "system":
-            # 处理系统消息
-            self.add_system_message(message_obj.content)
-        else:
-            self.message_area.add_message(message_obj)
+        from common.log import log
+        log.debug(f"视图接收到消息对象: {message_obj}")
+        
+        try:
+            # 检查消息对象类型
+            if hasattr(message_obj, 'content_type'):
+                # 如果是VO对象
+                content_type = message_obj.content_type
+                
+                if content_type == "system":
+                    # 处理系统消息
+                    content = getattr(message_obj, 'content', '')
+                    self.add_system_message(content)
+                else:
+                    # 普通消息
+                    self.message_area.add_message(message_obj)
+                    # 确保滚动到底部
+                    QTimer.singleShot(100, self.message_area.scroll_to_bottom)
+            elif isinstance(message_obj, dict):
+                # 如果是字典格式
+                if message_obj.get('content_type') == 'system':
+                    self.add_system_message(message_obj.get('content', ''))
+                else:
+                    self.message_area.add_message(message_obj)
+                    QTimer.singleShot(100, self.message_area.scroll_to_bottom)
+            else:
+                log.error(f"未知的消息格式: {type(message_obj)}")
+                self.add_system_message(f"消息格式错误: {type(message_obj)}")
+                
+        except Exception as e:
+            log.error(f"处理消息时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            self.add_system_message("消息处理错误")
 
     def on_user_list_updated(self, users: list):
         """处理用户列表更新"""

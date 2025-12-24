@@ -81,20 +81,38 @@ class ChatController(QObject):
     
     def on_message_received(self, message_vo):
         """处理接收到的消息"""
-        # 根据消息类型进行不同处理
         from common.log import log
-        log.debug(f"控制器接收到消息: {message_vo}")
-        if message_vo.content_type == "system":
-            # 系统消息直接发射，通知界面显示
-            log.debug(f"控制器接收到系统消息: {message_vo.content}")
-            self.system_message.emit(message_vo.content)
-        elif message_vo.content_type == "user_list":
-            # 当收到用户列表更新消息时，更新本地在线用户列表并发射信号
-            self.online_users = message_vo.content  # 假设content是用户列表数组
-            self.user_list_updated.emit(self.online_users)
-        else:
-            # 其他消息直接转发为message_received信号
-            self.message_received.emit(message_vo)
+        
+        try:
+            log.debug(f"控制器接收到消息VO: {message_vo}")
+            
+            # 确保message_vo是有效的VO对象
+            if not hasattr(message_vo, 'content_type'):
+                log.error(f"无效的消息对象: {message_vo}")
+                return
+                
+            content_type = message_vo.content_type
+            
+            if content_type == "system":
+                # 系统消息
+                content = getattr(message_vo, 'content', '')
+                log.debug(f"控制器处理系统消息: {content}")
+                self.system_message.emit(content)
+            elif content_type == "user_list":
+                # 用户列表更新
+                if hasattr(message_vo, 'content'):
+                    self.online_users = message_vo.content
+                    self.user_list_updated.emit(self.online_users)
+                    log.debug(f"用户列表更新: {len(self.online_users)} 个用户")
+            else:
+                # 其他消息
+                log.debug(f"控制器转发普通消息: {message_vo.username}: {message_vo.content}")
+                self.message_received.emit(message_vo)
+                
+        except Exception as e:
+            log.error(f"控制器处理消息时出错: {e}")
+            import traceback
+            traceback.print_exc()
     
     def on_user_list_updated(self, users: list):
         """处理用户列表更新"""
