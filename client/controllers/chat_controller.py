@@ -66,6 +66,9 @@ class ChatController(QObject):
         """使用现有的连接"""
         if self.network_manager.is_connected():
             self.current_user = username
+            self.connected = True  # 设置连接状态
+            # 主动请求用户列表，确保获取最新的在线用户信息
+            self.refresh_user_list()
             return True
         return False
     
@@ -76,34 +79,81 @@ class ChatController(QObject):
         self.current_user = None
         self.online_users = []
     
+    def on_message_received(self, message_vo):
+        """处理接收到的消息"""
+        # 根据消息类型进行不同处理
+        from common.log import log
+        log.debug(f"控制器接收到消息: {message_vo}")
+        if message_vo.content_type == "system":
+            # 系统消息直接发射，通知界面显示
+            log.debug(f"控制器接收到系统消息: {message_vo.content}")
+            self.system_message.emit(message_vo.content)
+        elif message_vo.content_type == "user_list":
+            # 当收到用户列表更新消息时，更新本地在线用户列表并发射信号
+            self.online_users = message_vo.content  # 假设content是用户列表数组
+            self.user_list_updated.emit(self.online_users)
+        else:
+            # 其他消息直接转发为message_received信号
+            self.message_received.emit(message_vo)
+    
+    def on_user_list_updated(self, users: list):
+        """处理用户列表更新"""
+        self.online_users = users
+        self.user_list_updated.emit(users)
+    
+    def on_connection_status(self, success: bool, message: str):
+        """处理连接状态变化"""
+        if success:
+            self.connected = True
+            self.connection_established.emit()
+        else:
+            self.connected = False
+            self.connection_failed.emit(message)
+    
+    def on_file_received(self, filename: str, file_path: str):
+        """处理接收到的文件"""
+        self.file_received.emit(filename, file_path)
+        self.system_message.emit(f"文件 '{filename}' 已接收并保存到: {file_path}")
+    
     def send_message(self, content: str, receiver: str = None) -> bool:
         """发送消息"""
-        if not self.connected:
-            self.system_message.emit("未连接到服务器")
+        from common.log import log
+        try:
+            # 检查网络连接状态而不是本地连接状态
+            if not self.network_manager.is_connected():
+                self.system_message.emit("未连接到服务器")
+                return False
+            
+            log.debug(f"控制器准备发送消息: {content}")
+            # 创建消息VO对象用于界面展示
+            message_vo = MessageVO(
+                message_id="",  # 会在服务端生成
+                user_id="",     # 会在服务端设置
+                username=self.current_user,
+                content_type="text",
+                content=content,
+                created_at=datetime.now()
+            )
+            
+            # 通过网络管理器发送消息
+            success = self.network_manager.send_message(message_vo)
+            if success:
+                self.message_sent.emit(message_vo)
+                log.debug(f"消息发送成功: {content}")
+            else:
+                self.system_message.emit("消息发送失败")
+                log.error(f"消息发送失败: {content}")
+            
+            return success
+        except Exception as e:
+            log.error(f"发送消息时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
             return False
-        
-        # 创建消息VO对象用于界面展示
-        message_vo = MessageVO(
-            message_id="",  # 会在服务端生成
-            user_id="",     # 会在服务端设置
-            username=self.current_user,
-            content_type="text",
-            content=content,
-            created_at=datetime.now()
-        )
-        
-        # 通过网络管理器发送消息
-        success = self.network_manager.send_message(message_vo)
-        if success:
-            self.message_sent.emit(message_vo)
-        else:
-            self.system_message.emit("消息发送失败")
-        
-        return success
     
     def send_file(self, file_path: str) -> bool:
         """发送文件"""
-        if not self.connected:
+        if not self.network_manager.is_connected():
             self.system_message.emit("未连接到服务器")
             return False
         
@@ -135,29 +185,18 @@ class ChatController(QObject):
     
     def refresh_user_list(self):
         """刷新用户列表"""
-        # 可以在这里向服务器发送刷新请求
-        pass
-    
-    def on_message_received(self, message_vo):
-        """处理接收到的消息"""
-        # 发射信号给视图层
-        self.message_received.emit(message_vo)
-    
-    def on_user_list_updated(self, users: list):
-        """处理用户列表更新"""
-        self.online_users = users
-        self.user_list_updated.emit(users)
-    
-    def on_connection_status(self, success: bool, message: str):
-        """处理连接状态变化"""
-        if success:
-            self.connected = True
-            self.connection_established.emit()
+        if not self.connected:
+            self.system_message.emit("未连接到服务器")
+            return
+        
+        # 通过网络管理器发送用户列表请求
+        if self.network_manager.is_connected():
+            # 发送获取用户列表的请求
+            # 这里可以发送一个特殊的消息类型来请求用户列表
+            request_data = {
+                'type': 'get_users',
+                'username': self.current_user
+            }
+            self.network_manager.send_data(request_data)
         else:
-            self.connected = False
-            self.connection_failed.emit(message)
-    
-    def on_file_received(self, filename: str, file_path: str):
-        """处理接收到的文件"""
-        self.file_received.emit(filename, file_path)
-        self.system_message.emit(f"文件 '{filename}' 已接收并保存到: {file_path}")
+            self.system_message.emit("网络连接已断开")

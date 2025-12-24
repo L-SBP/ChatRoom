@@ -60,17 +60,19 @@ class ClientHandler:
             # 处理不同类型的请求
             if request_type == 'login':
                 response = await self._handle_login(request)
+                # 登录成功时，响应已经在_handle_login中发送，返回None
+                if response is not None:
+                    await self._send_response(response)
             elif request_type == 'register':
                 response = await self._handle_register(request)
+                await self._send_response(response)
             else:
                 response = {
                     'type': 'error',
                     'success': False,
                     'message': f'未知的请求类型: {request_type}'
                 }
-
-            # 发送响应
-            await self._send_response(response)
+                await self._send_response(response)
 
         except json.JSONDecodeError:
             log.warning(f"客户端 {self.client_address} 发送的数据格式错误")
@@ -103,24 +105,28 @@ class ClientHandler:
 
             # 注册客户端
             if self.connection_manager.register_client(username, client):
-                # 广播用户加入消息
-                await self.connection_manager.broadcast_system_message(
-                    f"{username} 加入了聊天室"
-                )
-                
-                # 发送用户列表给所有客户端（包括刚连接的客户端）
-                await self.connection_manager.send_user_list()
-
                 log.info(f"用户 {username} 登录成功")
                 self.authenticated = True
                 self.username = username
 
-                return {
+                # 先发送登录成功响应
+                login_success_response = {
                     'type': 'login_success',
                     'success': True,
                     'message': '登录成功',
                     'username': username
                 }
+                await self._send_response(login_success_response)
+
+                # 然后广播用户加入消息
+                await self.connection_manager.broadcast_system_message(
+                    f"{username} 加入了聊天室"
+                )
+                
+                # 最后发送用户列表给所有客户端（包括刚连接的客户端）
+                await self.connection_manager.send_user_list()
+                
+                return None
             else:
                 return {
                     'type': 'login_failed',
@@ -173,6 +179,7 @@ class ClientHandler:
     async def _handle_messages(self) -> None:
         """处理已认证客户端的消息"""
         loop = asyncio.get_event_loop()
+        buffer = b""  # 接收缓冲区
 
         while True:
             try:
@@ -181,32 +188,43 @@ class ClientHandler:
                 if not data:
                     break
 
-                # 解析消息
-                decoded_data = data.decode('utf-8').strip()
-                if not decoded_data:
-                    continue
+                buffer += data
 
-                request = json.loads(decoded_data)
-                request['username'] = self.username
-                request_type = request.get('type')
+                # 尝试解析缓冲区中的所有完整JSON对象
+                while buffer:
+                    try:
+                        # 查找JSON对象的开始和结束位置
+                        # 这是一个简单的实现，假设每个JSON对象都是完整的
+                        decoded_data = buffer.decode('utf-8')
+                        # 尝试解析
+                        request = json.loads(decoded_data)
+                        request['username'] = self.username
+                        request_type = request.get('type')
 
-                # 处理消息
-                if request_type == 'message':
-                    await self._process_message(request)
-                elif request_type == 'file':
-                    await self._process_file(request)
-                elif request_type == 'refresh_users':
-                    await self.connection_manager.message_manager.send_user_list_to_client(
-                        self.client_socket
-                    )
-                elif request_type == 'logout':
-                    break  # 退出循环，触发清理
-                else:
-                    await self._send_response({
-                        'type': 'error',
-                        'success': False,
-                        'message': f'未知的消息类型: {request_type}'
-                    })
+                        # 处理消息
+                        if request_type in ['message', 'text']:
+                            await self._process_message(request)
+                        elif request_type == 'file':
+                            await self._process_file(request)
+                        elif request_type == 'refresh_users':
+                            await self.connection_manager.message_manager.send_user_list_to_client(
+                                self.client_socket
+                            )
+                        elif request_type == 'logout':
+                            # 退出所有循环，触发清理
+                            return
+                        else:
+                            await self._send_response({
+                                'type': 'error',
+                                'success': False,
+                                'message': f'未知的消息类型: {request_type}'
+                            })
+
+                        # 解析成功后清空缓冲区
+                        buffer = b""
+                    except json.JSONDecodeError:
+                        # 如果解析失败，说明数据不完整，继续接收
+                        break
 
             except json.JSONDecodeError:
                 log.warning(f"客户端 {self.client_address} 发送的数据格式错误")
@@ -218,7 +236,8 @@ class ClientHandler:
 
     async def _process_message(self, request: Dict[str, Any]) -> None:
         """处理文本消息"""
-        message = request.get('message', '')
+        # 同时支持 'message' 和 'content' 字段以保持兼容性
+        message = request.get('message', '') or request.get('content', '')
         timestamp = request.get('timestamp')
 
         if message.strip():

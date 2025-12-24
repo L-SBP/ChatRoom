@@ -98,7 +98,7 @@ class ChatView(QMainWindow):
         chat_layout.addWidget(chat_title)
 
         # 消息显示区域
-        self.message_area = ChatMessageArea()
+        self.message_area = ChatMessageArea(self.username)
         self.message_area.setMinimumHeight(400)
         self.message_area.setMaximumHeight(500)
         chat_layout.addWidget(self.message_area, 1)
@@ -347,14 +347,7 @@ class ChatView(QMainWindow):
 
     def on_file_received(self, filename: str, file_path: str):
         """处理接收到的文件"""
-        # 显示文件接收消息
-        self.message_area.add_file_msg(
-            "系统", 
-            file_path, 
-            False, 
-            time.strftime('%H:%M:%S')
-        )
-        self.add_system_message(f"文件 '{filename}' 已接收并保存到: {file_path}")
+        self.message_area.add_system_message(f"文件 '{filename}' 已接收并保存到: {file_path}")
 
     def on_system_message(self, message: str):
         """处理系统消息"""
@@ -398,18 +391,7 @@ class ChatView(QMainWindow):
 
     def add_system_message(self, message: str):
         """添加系统消息"""
-        cursor = self.message_area.textCursor()
-        cursor.movePosition(QTextCursor.End)
-
-        format_sys = QTextCharFormat()
-        format_sys.setForeground(QColor("#1B5E20"))  # 深绿色，提高对比度和可读性
-        format_sys.setFontItalic(True)
-
-        timestamp = time.strftime('%H:%M:%S')
-        cursor.insertText(f"[{timestamp}] 系统消息: {message}\n", format_sys)
-
-        self.message_area.setTextCursor(cursor)
-        self.message_area.ensureCursorVisible()
+        self.message_area.add_system_message(message)
 
     def closeEvent(self, event):
         """窗口关闭事件"""

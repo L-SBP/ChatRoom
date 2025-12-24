@@ -25,6 +25,7 @@ class NetworkThread(QThread):
     file_received = pyqtSignal(str, str)       # 文件名, 文件路径
     login_response = pyqtSignal(bool, str)     # 登录响应(成功/失败, 消息)
     register_response = pyqtSignal(bool, str)  # 注册响应(成功/失败, 消息)
+    system_message = pyqtSignal(str)           # 系统消息
     
     def __init__(self, server_host: str, server_port: int):
         super().__init__()
@@ -56,7 +57,8 @@ class NetworkThread(QThread):
                             self.handle_message(data)
                     else:
                         # 没有数据，可能是连接断开
-                        break
+                        # 添加延迟以避免空循环占用CPU
+                        time.sleep(0.01)
                 except socket.timeout:
                     # 超时，继续循环
                     continue
@@ -83,6 +85,8 @@ class NetworkThread(QThread):
     
     def handle_message(self, data: dict):
         """处理接收到的消息"""
+        from common.log import log
+        log.debug(f"网络层接收到原始数据: {data}")
         msg_type = data.get('type')
         
         if msg_type in ['text', 'image', 'video', 'file', 'audio']:
@@ -122,7 +126,16 @@ class NetworkThread(QThread):
             # 确保timestamp是数值类型
             if isinstance(timestamp, str):
                 try:
-                    timestamp = float(timestamp)
+                    # 如果是时间字符串格式如'15:35:49'，我们需要转换为时间戳
+                    if ':' in timestamp:
+                        # 将时间字符串转换为当日的时间戳
+                        import datetime as dt_module
+                        current_date = dt_module.date.today()
+                        time_obj = dt_module.datetime.strptime(timestamp, '%H:%M:%S').time()
+                        dt = dt_module.datetime.combine(current_date, time_obj)
+                        timestamp = dt.timestamp()
+                    else:
+                        timestamp = float(timestamp)
                 except ValueError:
                     timestamp = time.time()
             
@@ -136,6 +149,8 @@ class NetworkThread(QThread):
                 created_at=datetime.fromtimestamp(timestamp) if timestamp else None
             )
             
+            log.debug(f"网络层处理系统消息: {message_vo}")
+            # 只发送系统消息VO对象，不要同时发送系统消息信号，避免重复
             self.message_received.emit(message_vo)
             
         elif msg_type == 'file':
@@ -156,6 +171,8 @@ class NetworkThread(QThread):
                 
         elif msg_type == 'login_success':
             self.username = data.get('username', '')
+            # 设置连接状态为已连接
+            self.connection_status.emit(True, "登录成功")
             self.login_response.emit(True, "登录成功")
             
         elif msg_type == 'login_failed':
@@ -254,6 +271,7 @@ class NetworkThread(QThread):
                 # 接收更多数据
                 chunk = self.client_socket.recv(self.buffer_size)
                 if not chunk:
+                    # 连接已关闭
                     return None
                     
                 self._recv_buffer += chunk
@@ -269,8 +287,10 @@ class NetworkThread(QThread):
                         obj, index = self._extract_json_object(decoded_data)
                         if obj is not None:
                             results.append(obj)
-                            # 更新缓冲区，去掉已解析的部分
-                            self._recv_buffer = self._recv_buffer[index:]
+                            # 正确更新缓冲区：使用已解析的字符串长度对应的字节数
+                            # 将已解析的字符串转换回字节，获取正确的字节长度
+                            parsed_bytes = decoded_data[:index].encode('utf-8')
+                            self._recv_buffer = self._recv_buffer[len(parsed_bytes):]
                         else:
                             # 没有找到完整的JSON对象，退出循环
                             break
@@ -367,6 +387,9 @@ class NetworkThread(QThread):
     
     def close_connection(self):
         """关闭连接"""
+        if not self.running:
+            return  # 如果已经停止，直接返回
+        
         self.running = False
         if self.client_socket:
             try:
@@ -374,7 +397,7 @@ class NetworkThread(QThread):
                 logout_data = {'type': 'logout'}
                 self.send_data(logout_data)
             except:
-                pass
+                pass  # 忽略发送登出消息的错误
             try:
                 self.client_socket.close()
             except:
@@ -394,6 +417,7 @@ class NetworkManager(QObject):
     file_received = pyqtSignal(str, str)       # 文件名, 文件路径
     login_response = pyqtSignal(bool, str)     # 登录响应(成功/失败, 消息)
     register_response = pyqtSignal(bool, str)  # 注册响应(成功/失败, 消息)
+    system_message = pyqtSignal(str)           # 系统消息
     
     _instance = None
     _initialized = False
@@ -430,6 +454,7 @@ class NetworkManager(QObject):
         self.network_thread.file_received.connect(self.on_file_received)
         self.network_thread.login_response.connect(self.on_login_response)
         self.network_thread.register_response.connect(self.on_register_response)
+        self.network_thread.system_message.connect(self.on_system_message)
         self.network_thread.start()
         
         return True
@@ -453,14 +478,14 @@ class NetworkManager(QObject):
     
     def login(self, username: str, password: str) -> None:
         """用户登录"""
-        if self.network_thread and self.connected:
+        if self.network_thread and self.network_thread.running:
             self.network_thread.login(username, password)
         else:
             self.login_response.emit(False, "未连接到服务器")
     
     def register(self, user_vo: UserVO) -> None:
         """用户注册"""
-        if self.network_thread and self.connected:
+        if self.network_thread and self.network_thread.running:
             self.network_thread.register(user_vo)
         else:
             self.register_response.emit(False, "未连接到服务器")
@@ -476,6 +501,11 @@ class NetworkManager(QObject):
         if self.network_thread and self.connected:
             return self.network_thread.send_file(file_path)
         return False
+    
+    def send_data(self, data: dict):
+        """发送数据到服务器"""
+        if self.network_thread and self.connected:
+            self.network_thread.send_data(data)
     
     def on_message_received(self, message_vo):
         """处理接收到的消息"""
@@ -498,9 +528,13 @@ class NetworkManager(QObject):
         """处理登录响应"""
         if success:
             # 可以在这里保存用户名等信息
-            pass
+            self.connected = True  # 设置连接状态为已连接
         self.login_response.emit(success, message)
     
     def on_register_response(self, success: bool, message: str):
         """处理注册响应"""
         self.register_response.emit(success, message)
+
+    def on_system_message(self, message: str):
+        """处理系统消息"""
+        self.system_message.emit(message)

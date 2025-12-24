@@ -43,11 +43,14 @@ class AuthManager:
                     return False
 
                 # 创建新用户
+                # 将空字符串的email转换为None，避免唯一性约束冲突
+                email_value = email if email else None
+                
                 await user_crud.create(
                     session,
                     username=username,
                     password_hash=password_utils.hash_password(password),
-                    email=email,
+                    email=email_value,
                     display_name=display_name or username
                 )
 
