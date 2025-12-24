@@ -182,6 +182,48 @@ class ChatController(QObject):
             self.system_message.emit("文件发送失败")
         
         return success
+
+    def send_voice(self, file_path: str) -> bool:
+        """发送语音"""
+        if not self.network_manager.is_connected():
+            self.system_message.emit("未连接到服务器")
+            return False
+        
+        success = self.network_manager.send_file(file_path)  # 复用send_file方法
+        if success:
+            self.file_sent.emit(os.path.basename(file_path))
+        else:
+            self.system_message.emit("语音发送失败")
+        
+        return success
+
+    def send_image(self, file_path: str) -> bool:
+        """发送图片"""
+        if not self.network_manager.is_connected():
+            self.system_message.emit("未连接到服务器")
+            return False
+        
+        success = self.network_manager.send_file(file_path)  # 复用send_file方法
+        if success:
+            self.file_sent.emit(os.path.basename(file_path))
+        else:
+            self.system_message.emit("图片发送失败")
+        
+        return success
+
+    def send_video(self, file_path: str) -> bool:
+        """发送视频"""
+        if not self.network_manager.is_connected():
+            self.system_message.emit("未连接到服务器")
+            return False
+        
+        success = self.network_manager.send_file(file_path)  # 复用send_file方法
+        if success:
+            self.file_sent.emit(os.path.basename(file_path))
+        else:
+            self.system_message.emit("视频发送失败")
+        
+        return success
     
     def get_online_users(self) -> List[str]:
         """获取在线用户列表"""

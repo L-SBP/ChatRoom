@@ -81,6 +81,8 @@ class ChatMessageArea(QWidget):
             # 提取消息信息
             sender = getattr(message_vo, 'username', '未知用户')
             content = getattr(message_vo, 'content', '[无内容]')
+            content_type = getattr(message_vo, 'content_type', 'text')
+            file_vo = getattr(message_vo, 'file_vo', None)
             
             # 获取时间
             time_str = message_vo.get_formatted_time() if hasattr(message_vo, 'get_formatted_time') else ""
@@ -93,6 +95,47 @@ class ChatMessageArea(QWidget):
             safe_content = html.escape(content)
             safe_sender = html.escape(sender)
             
+            # 根据消息类型生成不同的显示内容
+            def get_message_content_html(content_type, content, file_vo):
+                if content_type in ['image', 'video', 'audio', 'file']:
+                    # 媒体类型消息
+                    if file_vo:
+                        file_name = getattr(file_vo, 'file_name', '未知文件')
+                        file_url = getattr(file_vo, 'file_url', '#')
+                        file_size = getattr(file_vo, 'file_size', 0)
+                        
+                        # 格式化文件大小
+                        def format_file_size(size_bytes):
+                            if size_bytes < 1024:
+                                return f"{size_bytes} B"
+                            elif size_bytes < 1024 * 1024:
+                                return f"{size_bytes / 1024:.1f} KB"
+                            elif size_bytes < 1024 * 1024 * 1024:
+                                return f"{size_bytes / (1024 * 1024):.1f} MB"
+                            else:
+                                return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+                        
+                        file_size_str = format_file_size(file_size)
+                        
+                        if content_type == 'image':
+                            # 图片消息
+                            return f"<img src='{file_url}' alt='图片' style='max-width: 300px; max-height: 300px; border-radius: 8px;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
+                        elif content_type == 'video':
+                            # 视频消息
+                            return f"[视频文件] {file_name} ({file_size_str})"
+                        elif content_type == 'audio':
+                            # 音频消息
+                            return f"[音频文件] {file_name} ({file_size_str})"
+                        elif content_type == 'file':
+                            # 文件消息
+                            return f"[文件] {file_name} ({file_size_str})"
+                    return "[媒体内容]"
+                else:
+                    # 文本消息
+                    return safe_content
+            
+            message_content = get_message_content_html(content_type, content, file_vo)
+            
             # 终极解决方案：使用极简HTML结构，只使用p和span标签
             # QTextBrowser对HTML支持有限，必须使用最基础的标签
             if self._current_user is not None and sender == self._current_user:
@@ -100,7 +143,7 @@ class ChatMessageArea(QWidget):
                 # 1. 头部信息（左对齐）
                 header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>我 {time_str} ✓ 已发送</p>"
                 # 2. 消息气泡（左对齐，蓝色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #007AFF; color: white; padding: 10px 15px; border-radius: 18px;'>{safe_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #007AFF; color: white; padding: 10px 15px; border-radius: 18px;'>{message_content}</span></p>"
                 # 3. 消息间隔
                 spacing_html = "<p style='height: 10px;'></p>"
                 
@@ -114,7 +157,7 @@ class ChatMessageArea(QWidget):
                 # 1. 头部信息（左对齐）
                 header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>{safe_sender} {time_str}</p>"
                 # 2. 消息气泡（左对齐，灰色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #E9E9EB; color: #333; padding: 10px 15px; border-radius: 18px;'>{safe_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #E9E9EB; color: #333; padding: 10px 15px; border-radius: 18px;'>{message_content}</span></p>"
                 # 3. 消息间隔
                 spacing_html = "<p style='height: 10px;'></p>"
                 

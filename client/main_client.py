@@ -11,8 +11,7 @@ import os
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 import qdarkstyle
 
@@ -20,7 +19,6 @@ import qdarkstyle
 from views.login_view import LoginView
 from views.chat_view import ChatView
 from views.register_view import RegisterView
-from views.server_config_view import ServerConfigView
 from network.network_manager import NetworkManager
 from common.config.client.config import get_client_config
 
@@ -59,9 +57,6 @@ class ChatRoomClient:
 
         # 设置样式
         self.app.setStyle("Fusion")
-
-        # 应用深色主题
-        self.app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
 
         # 显示登录窗口（不再需要服务器配置窗口）
         self.show_login()

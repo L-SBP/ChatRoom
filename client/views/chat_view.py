@@ -6,7 +6,7 @@
 """
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, \
-    QListWidget, QSplitter, QMenu, QAction, QMessageBox, QFileDialog, QApplication
+    QListWidget, QSplitter, QMenu, QAction, QMessageBox, QFileDialog, QApplication, QToolButton
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
 import time
@@ -103,42 +103,172 @@ class ChatView(QMainWindow):
         self.message_area.setMaximumHeight(500)
         chat_layout.addWidget(self.message_area, 1)
 
-        # 输入区域
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(8)  # 减小按钮间距
+        # 输入区域容器
+        input_container = QWidget()
+        input_container.setStyleSheet("""
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 8px;
+        """)
+        # 输入区域垂直布局
+        input_layout = QVBoxLayout(input_container)
+        input_layout.setSpacing(8)  # 设置元素间距
+        input_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 媒体工具栏按钮（在输入框上方）
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(8)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        
+
+        
+        # 语音发送按钮
+        self.voice_btn = QToolButton()
+        self.voice_btn.setText("🎤")  # 语音图标
+        self.voice_btn.setToolTip("发送语音")
+        self.voice_btn.setMinimumSize(36, 36)
+        self.voice_btn.setMaximumSize(36, 36)
+        self.voice_btn.clicked.connect(self.send_voice)
+        self.voice_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                font-size: 22px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        toolbar_layout.addWidget(self.voice_btn)
+        
+        # 图片发送按钮
+        self.image_btn = QToolButton()
+        self.image_btn.setText("🖼")  # 图片图标
+        self.image_btn.setToolTip("发送图片")
+        self.image_btn.setMinimumSize(36, 36)
+        self.image_btn.setMaximumSize(36, 36)
+        self.image_btn.clicked.connect(self.send_image)
+        self.image_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                font-size: 22px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        toolbar_layout.addWidget(self.image_btn)
+        
+        # 视频发送按钮
+        self.video_btn = QToolButton()
+        self.video_btn.setText("🎬")  # 视频图标
+        self.video_btn.setToolTip("发送视频")
+        self.video_btn.setMinimumSize(36, 36)
+        self.video_btn.setMaximumSize(36, 36)
+        self.video_btn.clicked.connect(self.send_video)
+        self.video_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                font-size: 22px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        toolbar_layout.addWidget(self.video_btn)
+        
+        # 文件发送按钮
+        self.file_btn = QToolButton()
+        self.file_btn.setText("📁")  # 文件图标
+        self.file_btn.setToolTip("发送文件")
+        self.file_btn.setMinimumSize(36, 36)
+        self.file_btn.setMaximumSize(36, 36)
+        self.file_btn.clicked.connect(self.send_file)
+        self.file_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                font-size: 22px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        toolbar_layout.addWidget(self.file_btn)
+
+        
+        # 分隔线
+        toolbar_layout.addStretch(1)
+        
+        # 设置按钮
+        self.settings_btn = QToolButton()
+        self.settings_btn.setText("⚙")  # 设置图标
+        self.settings_btn.setToolTip("设置")
+        self.settings_btn.setMinimumSize(36, 36)
+        self.settings_btn.setMaximumSize(36, 36)
+        self.settings_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                font-size: 22px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        toolbar_layout.addWidget(self.settings_btn)
+        
+        input_layout.addLayout(toolbar_layout)
 
         # 消息输入框
-        self.message_input = QLineEdit()
+        self.message_input = QTextEdit()
         self.message_input.setPlaceholderText("请输入消息...")
         self.message_input.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
-        self.message_input.returnPressed.connect(self.send_message)
-        self.message_input.setMinimumHeight(36)
-        self.message_input.setStyleSheet(f"""
-            QLineEdit {{
-                padding: 8px 12px;  /* 增加内边距，改善视觉效果 */
-                border: 1px solid #aaa;
-                border-radius: 6px;
-                font-family: {client_config.ui.font.family};
-                font-size: {client_config.ui.font.normalSize}px;
+        self.message_input.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.message_input.setTabChangesFocus(True)
+        self.message_input.textChanged.connect(self.update_input_height)
+        self.message_input.installEventFilter(self)
+        self.message_input.setMinimumHeight(72)  # 设置为大约2行高度
+        self.message_input.setMaximumHeight(108)  # 设置为大约3行高度
+        # 设置样式表，避免使用f-string的花括号转义问题
+        self.message_input.setStyleSheet("""
+            QTextEdit {
+                padding: 10px 14px;
+                border: 1px solid #ddd;
+                border-radius: 20px;
                 background-color: #ffffff;
                 color: #000000;
-            }}
+            }
         """)
-        input_layout.addWidget(self.message_input, 1)
+        input_layout.addWidget(self.message_input)
 
+        # 发送按钮布局
+        send_layout = QHBoxLayout()
+        send_layout.setSpacing(8)
+        send_layout.setContentsMargins(0, 0, 0, 0)
+        send_layout.addStretch(1)
+        
         # 发送按钮
-        self.send_btn = QPushButton("发送")
+        self.send_btn = QPushButton("发送(S)")
         self.send_btn.setMinimumWidth(100)
         self.send_btn.setMaximumWidth(140)
-        self.send_btn.setMinimumHeight(36)  # 增加按钮高度
+        self.send_btn.setMinimumHeight(38)  # 增加按钮高度
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                padding: 10px 16px;
-                border-radius: 6px;
+                padding: 10px 20px;
+                border-radius: 20px;
                 font-weight: bold;
                 font-size: 14px;
                 min-width: 100px;
@@ -151,36 +281,11 @@ class ChatView(QMainWindow):
                 background-color: #3d8b40;
             }
         """)
-        input_layout.addWidget(self.send_btn)
+        send_layout.addWidget(self.send_btn)
+        
+        input_layout.addLayout(send_layout)
 
-        # 文件发送按钮
-        self.file_btn = QPushButton("文件")
-        self.file_btn.setMinimumWidth(100)
-        self.file_btn.setMaximumWidth(140)
-        self.file_btn.setMinimumHeight(36)  # 增加按钮高度
-        self.file_btn.clicked.connect(self.send_file)
-        self.file_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 10px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 14px;
-                min-width: 100px;
-                max-width: 140px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
-            }
-        """)
-        input_layout.addWidget(self.file_btn)
-
-        chat_layout.addLayout(input_layout)
+        chat_layout.addWidget(input_container)
 
         chat_widget.setLayout(chat_layout)
 
@@ -384,13 +489,42 @@ class ChatView(QMainWindow):
 
     def send_message(self):
         """发送消息"""
-        message = self.message_input.text().strip()
+        message = self.message_input.toPlainText().strip()
         if message:
             # 发送到服务器
             self.controller.send_message(message)
 
             # 清空输入框
             self.message_input.clear()
+
+    def update_input_height(self):
+        """自动调整输入框高度"""
+        document = self.message_input.document()
+        document_height = document.size().height()
+        current_height = self.message_input.height()
+        
+        # 如果内容高度超过当前高度且未达到最大高度，则增加高度
+        if document_height > current_height and current_height < self.message_input.maximumHeight():
+            self.message_input.setMinimumHeight(int(document_height) + 20)  # 20是内边距
+        # 如果内容高度减小且大于最小高度，则减小高度
+        elif document_height < current_height and current_height > self.message_input.minimumHeight():
+            new_height = max(int(document_height) + 20, self.message_input.minimumHeight())
+            self.message_input.setMinimumHeight(new_height)
+
+    def eventFilter(self, obj, event):
+        """事件过滤器，处理Enter键发送消息"""
+        from PyQt5.QtCore import QEvent
+        if obj == self.message_input:
+            if event.type() == QEvent.KeyPress:
+                if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                    if event.modifiers() == Qt.ShiftModifier:
+                        # 按下Shift+Enter，插入换行符
+                        return False
+                    else:
+                        # 直接按Enter，发送消息
+                        self.send_message()
+                        return True
+        return super().eventFilter(obj, event)
 
     def send_file(self):
         """发送文件"""
@@ -401,6 +535,36 @@ class ChatView(QMainWindow):
             success = self.controller.send_file(file_path)
             if not success:
                 QMessageBox.warning(self, "发送失败", "文件发送失败，请检查连接")
+
+    def send_voice(self):
+        """发送语音"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择要发送的语音文件", "", "音频文件 (*.mp3 *.wav *.ogg *.aac)"
+        )
+        if file_path:
+            success = self.controller.send_voice(file_path)
+            if not success:
+                QMessageBox.warning(self, "发送失败", "语音发送失败，请检查连接")
+
+    def send_image(self):
+        """发送图片"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择要发送的图片文件", "", "图片文件 (*.jpg *.jpeg *.png *.gif *.bmp)"
+        )
+        if file_path:
+            success = self.controller.send_image(file_path)
+            if not success:
+                QMessageBox.warning(self, "发送失败", "图片发送失败，请检查连接")
+
+    def send_video(self):
+        """发送视频"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择要发送的视频文件", "", "视频文件 (*.mp4 *.avi *.mov *.wmv *.flv)"
+        )
+        if file_path:
+            success = self.controller.send_video(file_path)
+            if not success:
+                QMessageBox.warning(self, "发送失败", "视频发送失败，请检查连接")
 
     def start_private_chat(self):
         """开始私聊"""
@@ -431,6 +595,26 @@ class ChatView(QMainWindow):
         msg_box.setIcon(QMessageBox.Question)
         msg_box.setWindowFlags(msg_box.windowFlags() & ~Qt.WindowContextHelpButtonHint)  # 去掉帮助按钮
 
+        # 设置弹窗整体样式
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;
+            }
+            QMessageBox::title {
+                color: #000000;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 12px 0 0 0;
+            }
+            QMessageBox QLabel {
+                color: #000000 !important;
+                font-size: 14px;
+                font-weight: 500;
+            }
+        """)
+
         # 1. 手动创建按钮（指定文本）
         yes_btn = QPushButton("是")
         no_btn = QPushButton("否")
@@ -438,19 +622,18 @@ class ChatView(QMainWindow):
         msg_box.addButton(no_btn, QMessageBox.NoRole)
         msg_box.setDefaultButton(no_btn)
 
-        # 2. 调整“是”按钮样式（缩小尺寸+字体纯白加粗）
+        # 2. 调整“是”按钮样式（紧凑设计）
         yes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2E7D32; /* 深绿色背景 */
-                color: #FFFFFF !important; /* 强制纯白文字，避免变浅 */
+                color: #FFFFFF !important; /* 强制纯白文字 */
                 border: none;
-                padding: 8px 16px; /* 缩小内边距，按钮变小 */
-                border-radius: 6px; /* 圆角适中 */
-                font-family: %s;
-                font-size: %dpx; /* 字体大小适中 */
-                font-weight: bold !important; /* 强制加粗，文字更醒目 */
-                min-width: 80px; /* 缩小最小宽度 */
-                min-height: 36px; /* 缩小最小高度 */
+                padding: 6px 16px;
+                border-radius: 6px;
+                font-weight: bold !important;
+                font-size: 14px;
+                min-width: 70px;
+                min-height: 32px;
             }
             QPushButton:hover {
                 background-color: #1B5E20; /* hover加深 */
@@ -458,33 +641,32 @@ class ChatView(QMainWindow):
             QPushButton:pressed {
                 background-color: #08330C; /* 按下更暗 */
             }
-        """ % (client_config.ui.font.family, client_config.ui.font.normalSize + 1))
+        """)
 
-        # 3. 调整“否”按钮样式（和“是”按钮尺寸一致）
+        # 3. 调整“否”按钮样式（紧凑设计）
         no_btn.setStyleSheet("""
             QPushButton {
-                background-color: #616161; /* 深灰色背景 */
-                color: #FFFFFF !important; /* 强制纯白文字，避免变浅 */
-                border: none;
-                padding: 8px 16px; /* 缩小内边距 */
-                border-radius: 6px; /* 圆角适中 */
-                font-family: %s;
-                font-size: %dpx; /* 字体大小适中 */
-                font-weight: bold !important; /* 强制加粗 */
-                min-width: 80px; /* 缩小最小宽度 */
-                min-height: 36px; /* 缩小最小高度 */
+                background-color: #F5F5F5; /* 浅灰色背景 */
+                color: #000000 !important; /* 黑色文字 */
+                border: 1px solid #E0E0E0;
+                padding: 6px 16px;
+                border-radius: 6px;
+                font-weight: bold !important;
+                font-size: 14px;
+                min-width: 70px;
+                min-height: 32px;
             }
             QPushButton:hover {
-                background-color: #424242; /* hover加深 */
+                background-color: #E0E0E0; /* hover加深 */
             }
             QPushButton:pressed {
-                background-color: #212121; /* 按下更暗 */
+                background-color: #BDBDBD; /* 按下更暗 */
             }
-        """ % (client_config.ui.font.family, client_config.ui.font.normalSize + 1))
+        """)
 
-        # 4. 调整弹窗布局（边距适中）
-        msg_box.layout().setContentsMargins(15, 15, 15, 15)
-        msg_box.layout().setSpacing(10)
+        # 4. 调整弹窗布局（优化边距和间距）
+        msg_box.layout().setContentsMargins(20, 20, 20, 20)
+        msg_box.layout().setSpacing(15)
 
         # 执行弹窗
         reply = msg_box.exec_()
