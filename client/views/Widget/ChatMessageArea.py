@@ -20,21 +20,18 @@ class ChatMessageArea(QWidget):
         # 主消息显示区域
         self.msg_browser = QTextBrowser()
         self.msg_browser.setReadOnly(True)
-        self.msg_browser.setFont(QFont("Microsoft YaHei", 12))
+        # 调整全局字体大小，从12px增大到14px
+        self.msg_browser.setFont(QFont("Microsoft YaHei", 14))
         
-        # 统一的样式表 - 解决显示问题
+        # 简洁的样式表
         self.msg_browser.setStyleSheet("""
             QTextBrowser {
-                background-color: #f5f5f7;
+                background-color: white;
                 border: none;
-                border-radius: 8px;
                 padding: 15px;
-                font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
-                line-height: 1.6;
-                color: #333333;
-            }
-            QTextBrowser QAbstractScrollArea::corner {
-                background-color: transparent;
+                font-family: 'Microsoft YaHei';
+                line-height: 1.5;
+                color: #333;
             }
         """)
 
@@ -48,41 +45,20 @@ class ChatMessageArea(QWidget):
         self.setStyleSheet("""
             ChatMessageArea {
                 background-color: #f0f2f5;
-                border-radius: 8px;
             }
         """)
 
     def add_system_message(self, content: str):
-        """添加系统消息 - 确保独立显示"""
-        # HTML转义防止XSS和解析错误
-        safe_content = html.escape(content)
+        """添加系统消息 - 确保独立显示且无背景色"""
+        # 使用HTML格式确保每条消息独立显示，p标签会自动创建新段落
+        # 显式设置样式：灰色文字、小号字体、上下边距确保间距
+        # 调整系统消息字体大小，从12px增大到13px
+        message_html = f"<p style='color: #666; font-size: 13px; margin: 8px 0;'>[系统消息] {content}</p>"
+        # 添加一个空行，保持与普通消息的间隔一致
+        spacing_html = "<p style='height: 10px;'></p>"
+        self.msg_browser.append(message_html)
+        self.msg_browser.append(spacing_html)
         
-        # 系统消息样式 - 使用绝对居中的独立块
-        style = f'''
-        <div style="
-            margin: 12px 0;
-            clear: both;
-            display: block;
-            overflow: hidden;
-            text-align: center;
-        ">
-            <span style="
-                background-color: #e8f4fd;
-                color: #2c5282;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-size: 12px;
-                display: inline-block;
-                font-weight: 500;
-                border: 1px solid #bee3f8;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            ">
-                ⓘ {safe_content}
-            </span>
-        </div>
-        '''
-        
-        self._append_html(style)
         log.debug(f"添加系统消息: {content}")
 
     def add_message(self, message):
@@ -106,11 +82,6 @@ class ChatMessageArea(QWidget):
             sender = getattr(message_vo, 'username', '未知用户')
             content = getattr(message_vo, 'content', '[无内容]')
             
-            # HTML转义内容，防止XSS和解析错误
-            safe_content = html.escape(content) if content else ''
-            current_user = self._current_user
-            is_self = (current_user is not None and sender == current_user)
-            
             # 获取时间
             time_str = message_vo.get_formatted_time() if hasattr(message_vo, 'get_formatted_time') else ""
             
@@ -118,115 +89,41 @@ class ChatMessageArea(QWidget):
             self._message_count += 1
             msg_id = f"msg_{self._message_count:04d}"
             
-            # 消息容器样式 - 使用浮动布局确保内容正确显示
-            if is_self:
-                # 自己发送的消息 - 右侧优化
-                style = f'''
-                <div id="{msg_id}" style="
-                    margin: 8px 0;
-                    clear: both;
-                    overflow: hidden;
-                ">
-                    <!-- 消息容器：强制右对齐 -->
-                    <div style="
-                        float: right;
-                        max-width: 65%;
-                        text-align: right;
-                    ">
-                        <!-- 头部：我 + 时间 + 已发送（紧凑排列） -->
-                        <div style="
-                            font-size: 11px;
-                            margin-bottom: 4px;
-                            color: #666;
-                            text-align: right;
-                        ">
-                            <span style="
-                                color: #2b6cb0;
-                                font-weight: 600;
-                                font-size: 12px;
-                            ">我</span>
-                            <span style="
-                                color: #888;
-                                margin-left: 8px;
-                            ">{time_str}</span>
-                            <span style="
-                                color: #48bb78;
-                                margin-left: 6px;
-                                font-size: 10px;
-                            ">✓ 已发送</span>
-                        </div>
-                        
-                        <!-- 消息气泡：纯色背景+清晰文字 -->
-                        <div style="
-                            background-color: #4299e1 !important;
-                            color: white !important;
-                            padding: 10px 14px;
-                            border-radius: 16px 4px 16px 16px;
-                            display: inline-block;
-                            text-align: left;
-                            line-height: 1.5;
-                            word-break: break-word;
-                            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-                            font-size: 13px;
-                            max-width: 100%;
-                        ">
-                            {safe_content}
-                        </div>
-                    </div>
-                </div>
-                '''
-            else:
-                # 他人发送的消息 - 左侧优化
-                style = f'''
-                <div id="{msg_id}" style="
-                    margin: 8px 0;
-                    clear: both;
-                    overflow: hidden;
-                ">
-                    <!-- 消息容器：强制左对齐 -->
-                    <div style="
-                        float: left;
-                        max-width: 65%;
-                        text-align: left;
-                    ">
-                        <!-- 头部：用户名 + 时间 -->
-                        <div style="
-                            font-size: 11px;
-                            margin-bottom: 4px;
-                            color: #888;
-                            text-align: left;
-                        ">
-                            <span style="
-                                color: #2d3748;
-                                font-weight: 600;
-                                font-size: 12px;
-                            ">{sender}</span>
-                            <span style="
-                                color: #888;
-                                margin-left: 8px;
-                            ">{time_str}</span>
-                        </div>
-                        
-                        <!-- 消息气泡：柔和背景+无冗余边框 -->
-                        <div style="
-                            background-color: #f0f8fb !important;
-                            color: #2d3748 !important;
-                            padding: 10px 14px;
-                            border-radius: 4px 16px 16px 16px;
-                            display: inline-block;
-                            line-height: 1.5;
-                            word-break: break-word;
-                            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-                            font-size: 13px;
-                            max-width: 100%;
-                        ">
-                            {safe_content}
-                        </div>
-                    </div>
-                </div>
-                '''
+            # HTML转义防止XSS和解析错误
+            safe_content = html.escape(content)
+            safe_sender = html.escape(sender)
             
-            self._append_html(style)
+            # 终极解决方案：使用极简HTML结构，只使用p和span标签
+            # QTextBrowser对HTML支持有限，必须使用最基础的标签
+            if self._current_user is not None and sender == self._current_user:
+                # 自己发送的消息 - 极简结构
+                # 1. 头部信息（左对齐）
+                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>我 {time_str} ✓ 已发送</p>"
+                # 2. 消息气泡（左对齐，蓝色背景，圆角）
+                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #007AFF; color: white; padding: 10px 15px; border-radius: 18px;'>{safe_content}</span></p>"
+                # 3. 消息间隔
+                spacing_html = "<p style='height: 10px;'></p>"
+                
+                # 确保普通消息在新段落中显示
+                # 先添加一个空段落作为分隔
+                self.msg_browser.append("")
+                # 然后插入HTML内容
+                self.msg_browser.insertHtml(header_html + bubble_html + spacing_html)
+            else:
+                # 他人发送的消息 - 极简结构
+                # 1. 头部信息（左对齐）
+                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>{safe_sender} {time_str}</p>"
+                # 2. 消息气泡（左对齐，灰色背景，圆角）
+                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #E9E9EB; color: #333; padding: 10px 15px; border-radius: 18px;'>{safe_content}</span></p>"
+                # 3. 消息间隔
+                spacing_html = "<p style='height: 10px;'></p>"
+                
+                # 确保普通消息在新段落中显示
+                # 先添加一个空段落作为分隔
+                self.msg_browser.append("")
+                # 然后插入HTML内容
+                self.msg_browser.insertHtml(header_html + bubble_html + spacing_html)
+            
             log.debug(f"消息已添加到界面: {content[:50]}...")
             
         except Exception as e:
@@ -235,24 +132,6 @@ class ChatMessageArea(QWidget):
             traceback.print_exc()
             # 显示错误消息
             self.add_system_message(f"消息显示错误: {str(e)[:50]}")
-
-    def _append_html(self, html_content: str):
-        """安全地添加HTML内容"""
-        cursor = self.msg_browser.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        
-        # 只保留必要的换行（删除多余的<br>）
-        if cursor.position() > 0:
-            cursor.insertHtml("<br>")
-        
-        cursor.insertHtml(html_content)
-        # 移除这里的多余<br>，避免消息间距过大
-        
-        self.msg_browser.setTextCursor(cursor)
-        self.msg_browser.ensureCursorVisible()
-        
-        # 限制消息数量，防止内存占用过大
-        self._limit_message_count()
 
     def _limit_message_count(self, max_messages: int = 500):
         """限制消息数量，防止内存泄漏"""
