@@ -40,6 +40,7 @@ class RequestDispatcher:
             'audio': self.message_handler.handle_message,
             'refresh_users': self.user_handler.handle_refresh_users,
             'logout': self.auth_handler.handle_logout,
+            'get_history': self.message_handler.handle_get_history,
         }
 
     async def dispatch(self, request_type: str, request_data: Dict[str, Any],

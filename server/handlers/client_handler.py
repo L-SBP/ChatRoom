@@ -210,6 +210,12 @@ class ClientHandler:
                             await self.connection_manager.message_manager.send_user_list_to_client(
                                 self.client_socket
                             )
+                        elif request_type == 'get_history':
+                            # 处理获取历史消息请求
+                            from server.handlers.message_handler import MessageHandler
+                            message_handler = MessageHandler(self.connection_manager)
+                            response = await message_handler.handle_get_history(request)
+                            await self._send_response(response)
                         elif request_type == 'logout':
                             # 退出所有循环，触发清理
                             return
@@ -244,7 +250,8 @@ class ClientHandler:
             await self.connection_manager.message_manager.broadcast_message(
                 username=self.username,
                 message=message,
-                timestamp=timestamp
+                timestamp=timestamp,
+                sender_socket=self.client_socket
             )
 
     async def _process_file(self, request: Dict[str, Any]) -> None:
@@ -264,7 +271,8 @@ class ClientHandler:
                 username=self.username,
                 filename=filename,
                 file_data=file_data,
-                file_size=file_size  # 确保传递的是整数
+                file_size=file_size,  # 确保传递的是整数
+                sender_socket=self.client_socket
             )
 
     async def _send_response(self, response: Dict[str, Any]) -> None:

@@ -10,10 +10,12 @@ import time
 from typing import List, Optional
 import socket
 
+from sqlalchemy import select
 from common.log import log
 from common.database.pg_helper import PgHelper
 from common.database.crud.global_messages_crud import GlobalMessageCRUD
 from common.database.crud.users_crud import user_crud
+from common.database.models.users import Users
 
 
 class MessageManager:
@@ -24,7 +26,7 @@ class MessageManager:
         self.db_engine = db_engine
         self.message_crud = GlobalMessageCRUD()
 
-    async def broadcast_message(self, username: str, message: str, timestamp=None) -> None:
+    async def broadcast_message(self, username: str, message: str, timestamp=None, sender_socket=None) -> None:
         """广播文本消息"""
         if timestamp is None:
             timestamp = time.time()
@@ -40,11 +42,11 @@ class MessageManager:
         # 保存到数据库
         await self._save_text_message_to_db(username, message, timestamp)
 
-        # 发送给所有客户端
-        await self._broadcast_to_clients(broadcast_message)
+        # 发送给所有客户端（除了发送者）
+        await self._broadcast_to_clients(broadcast_message, exclude_socket=sender_socket)
 
     async def broadcast_file(self, username: str, filename: str,
-                             file_data: str, file_size: int) -> None:
+                             file_data: str, file_size: int, sender_socket=None) -> None:
         """广播文件"""
         # 构造文件消息
         file_message = {
@@ -58,8 +60,8 @@ class MessageManager:
         # 保存到数据库
         await self._save_file_message_to_db(username, filename, file_size, time.time())
 
-        # 发送给所有客户端
-        await self._broadcast_to_clients(file_message)
+        # 发送给所有客户端（除了发送者）
+        await self._broadcast_to_clients(file_message, exclude_socket=sender_socket)
 
     async def broadcast_system_message(self, message: str) -> None:
         """广播系统消息"""
@@ -100,11 +102,15 @@ class MessageManager:
         except Exception as e:
             log.error(f"发送用户列表失败: {e}")
 
-    async def _broadcast_to_clients(self, message: dict) -> None:
+    async def _broadcast_to_clients(self, message: dict, exclude_socket=None) -> None:
         """广播消息给所有客户端"""
         disconnected_clients: List[str] = []
 
         for username, client in self.connection_manager.clients.items():
+            # 如果指定了排除的socket，则跳过该客户端
+            if exclude_socket and client.socket == exclude_socket:
+                continue
+            
             try:
                 client.socket.send(json.dumps(message).encode('utf-8'))
             except Exception as e:
@@ -255,3 +261,47 @@ class MessageManager:
 
         except Exception as e:
             log.error(f"保存系统消息到数据库失败: {e}")
+
+    async def get_history_messages(self, message_id: str = None, limit: int = 50) -> list:
+        """获取历史消息"""
+        try:
+            async with PgHelper.get_async_session(self.db_engine) as session:
+                if message_id is None:
+                    # 获取最新的limit条消息
+                    messages = await self.message_crud.get_lasted_message(session, limit)
+                else:
+                    # 获取message_id之前的limit条消息
+                    messages = await self.message_crud.get_before_message(session, message_id, limit)
+                
+                # 转换为客户端需要的格式
+                history_messages = []
+                for msg in messages:
+                    # 获取用户名
+                    username = "系统" if msg.user_id is None else "未知用户"
+                    if msg.user_id:
+                        # 使用get_by_id方法获取用户，如果不存在则返回None
+                        query = select(Users).where(Users.user_id == msg.user_id)
+                        user_result = await session.execute(query)
+                        user = user_result.scalar_one_or_none()
+                        if user:
+                            username = user.username
+                    
+                    # 格式化消息
+                    message_data = {
+                        'message_id': str(msg.message_id),  # 确保UUID转为字符串
+                        'username': username,
+                        'content_type': msg.content_type,
+                        'content': msg.content,
+                        'timestamp': msg.created_at.isoformat(),  # 使用ISO格式时间戳
+                        'file_size': msg.file_size,
+                        'file_name': msg.file_name
+                    }
+                    history_messages.append(message_data)
+                
+                # 不需要反转，因为我们要按时间顺序（从旧到新）返回
+                # history_messages.reverse()
+                return history_messages
+                
+        except Exception as e:
+            log.error(f"获取历史消息失败: {e}")
+            return []

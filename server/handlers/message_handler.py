@@ -81,9 +81,32 @@ class MessageHandler:
             }
 
         except Exception as e:
-            self.logger.error(f"消息处理失败: {e}")
+            log.error(f"消息处理失败: {e}")
             return {
                 'type': 'error',
                 'success': False,
                 'message': '消息发送失败'
+            }
+
+    async def handle_get_history(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """处理获取历史消息的请求"""
+        try:
+            message_id = request_data.get('message_id')
+            limit = request_data.get('limit', 50)
+            
+            # 获取历史消息
+            history_messages = await self.connection_manager.message_manager.get_history_messages(message_id, limit)
+            
+            return {
+                'type': 'get_history',
+                'success': True,
+                'messages': history_messages
+            }
+            
+        except Exception as e:
+            log.error(f"获取历史消息失败: {e}")
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '获取历史消息失败'
             }

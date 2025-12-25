@@ -183,6 +183,46 @@ class NetworkThread(QThread):
             
         elif msg_type == 'register_failed':
             self.register_response.emit(False, data.get('message', '注册失败'))
+            
+        elif msg_type == 'get_history':
+            # 处理历史消息响应
+            success = data.get('success', False)
+            messages = data.get('messages', [])
+            
+            if success and messages:
+                message_vos = []
+                for msg in messages:
+                    # 转换时间戳
+                    timestamp_str = msg.get('timestamp')
+                    created_at = None
+                    if timestamp_str:
+                        try:
+                            # 如果是ISO格式的时间字符串，直接解析
+                            if isinstance(timestamp_str, str):
+                                created_at = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            else:
+                                # 如果是时间戳，转换为datetime对象
+                                created_at = datetime.fromtimestamp(timestamp_str)
+                        except ValueError:
+                            # 如果解析失败，使用当前时间
+                            created_at = datetime.now()
+                    
+                    # 创建消息VO对象
+                    message_vo = MessageVO(
+                        message_id=msg.get('message_id', ''),
+                        user_id='',
+                        username=msg.get('username', ''),
+                        content_type=msg.get('content_type', 'text'),
+                        content=msg.get('content', ''),
+                        created_at=created_at
+                    )
+                    message_vos.append(message_vo)
+                
+                # 发送历史消息信号
+                self.message_received.emit(message_vos)
+            else:
+                # 如果没有历史消息，发送空列表
+                self.message_received.emit([])
     
     def login(self, username: str, password: str) -> None:
         """发送登录请求"""
@@ -258,11 +298,31 @@ class NetworkThread(QThread):
         """发送数据到服务器"""
         if self.client_socket:
             try:
+                from common.log import log
+                log.debug(f"NetworkThread发送数据: {data}")
                 json_data = json.dumps(data)
                 self.client_socket.send(json_data.encode('utf-8'))
+                log.debug(f"NetworkThread数据发送成功: {data['type']}")
             except Exception as e:
-                print(f"发送数据失败: {e}")
+                from common.log import log
+                log.error(f"NetworkThread发送数据失败: {e}")
                 self.connection_status.emit(False, f"发送数据失败: {str(e)}")
+    
+    def get_history_messages(self, message_id: str = None, limit: int = 50):
+        """获取历史消息"""
+        from common.log import log
+        log.debug(f"NetworkThread.get_history_messages被调用: client_socket={self.client_socket}, running={self.running}")
+        if self.client_socket and self.running:
+            data = {
+                'type': 'get_history',
+                'message_id': message_id,
+                'limit': limit
+            }
+            log.debug(f"NetworkThread.get_history_messages: 准备发送请求数据: {data}")
+            self.send_data(data)
+            log.debug(f"NetworkThread.get_history_messages: 请求数据已发送到send_data方法")
+        else:
+            log.debug(f"NetworkThread.get_history_messages: client_socket或running条件不满足，无法发送请求")
     
     def receive_data(self) -> Optional[list]:
         """从服务器接收数据"""
@@ -506,6 +566,18 @@ class NetworkManager(QObject):
         """发送数据到服务器"""
         if self.network_thread and self.connected:
             self.network_thread.send_data(data)
+    
+    def get_history_messages(self, message_id: str = None, limit: int = 50):
+        """获取历史消息"""
+        from common.log import log
+        log.debug(f"NetworkManager.get_history_messages被调用: is_connected={self.is_connected()}, network_thread={self.network_thread}, network_thread.isRunning={self.network_thread.isRunning() if self.network_thread else False}, connected={self.connected}")
+        if self.is_connected():
+            self.network_thread.get_history_messages(message_id, limit)
+            log.debug(f"NetworkManager.get_history_messages: 请求已发送到network_thread")
+            return True
+        else:
+            log.debug(f"NetworkManager.get_history_messages: 连接未建立，请求发送失败")
+            return False
     
     def on_message_received(self, message_vo):
         """处理接收到的消息"""

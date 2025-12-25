@@ -49,6 +49,7 @@ class ChatView(QMainWindow):
         # 初始化控制器
         self.controller = ChatController()
         self.controller.message_received.connect(self.on_message_received)
+        self.controller.message_sent.connect(self.on_message_sent)  # 处理自己发送的消息
         self.controller.user_list_updated.connect(self.on_user_list_updated)
         self.controller.connection_established.connect(self.on_connection_established)
         self.controller.connection_failed.connect(self.on_connection_failed)
@@ -57,6 +58,12 @@ class ChatView(QMainWindow):
 
         # 初始化UI
         self.init_ui()
+
+        # 设置消息区域的加载更多方法
+        self.message_area._load_more_messages = self._load_more_messages
+        # 重新连接按钮的clicked信号到新的方法
+        self.message_area.load_history_btn.clicked.disconnect()
+        self.message_area.load_history_btn.clicked.connect(self._load_more_messages)
 
         # 连接到服务器
         self.connect_to_server()
@@ -89,7 +96,7 @@ class ChatView(QMainWindow):
         chat_widget = QWidget()
         chat_layout = QVBoxLayout()
         chat_layout.setContentsMargins(15, 15, 10, 15)  # 增加边距，改善视觉效果
-        chat_layout.setSpacing(12)  # 增加间距，避免拥挤
+        chat_layout.setSpacing(20)  # 增加间距，确保消息区域和输入区域之间有足够空间
 
         # 聊天标题
         chat_title = QLabel("聊天室")
@@ -100,7 +107,12 @@ class ChatView(QMainWindow):
         # 消息显示区域
         self.message_area = ChatMessageArea(self.username)
         self.message_area.setMinimumHeight(400)
-        self.message_area.setMaximumHeight(500)
+        # 移除最大高度限制，让消息区域可以根据窗口大小自适应
+        self.message_area.setStyleSheet("""
+            ChatMessageArea {
+                background-color: #f0f2f5;
+            }
+        """)
         chat_layout.addWidget(self.message_area, 1)
 
         # 输入区域容器
@@ -109,8 +121,9 @@ class ChatView(QMainWindow):
             background-color: #ffffff;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
-            padding: 8px;
+            padding: 12px;
         """)
+        
         # 输入区域垂直布局
         input_layout = QVBoxLayout(input_container)
         input_layout.setSpacing(8)  # 设置元素间距
@@ -119,10 +132,8 @@ class ChatView(QMainWindow):
         # 媒体工具栏按钮（在输入框上方）
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(8)
-        toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        
+        toolbar_layout.setContentsMargins(0, 0, 0, 8)  # 底部留出间距
 
-        
         # 语音发送按钮
         self.voice_btn = QToolButton()
         self.voice_btn.setText("🎤")  # 语音图标
@@ -203,9 +214,8 @@ class ChatView(QMainWindow):
         """)
         toolbar_layout.addWidget(self.file_btn)
 
-        
-        # 分隔线
-        toolbar_layout.addStretch(1)
+        # 将媒体按钮和设置按钮分开
+        toolbar_layout.addStretch(0)
         
         # 设置按钮
         self.settings_btn = QToolButton()
@@ -226,8 +236,6 @@ class ChatView(QMainWindow):
         """)
         toolbar_layout.addWidget(self.settings_btn)
         
-        input_layout.addLayout(toolbar_layout)
-
         # 消息输入框
         self.message_input = QTextEdit()
         self.message_input.setPlaceholderText("请输入消息...")
@@ -253,7 +261,12 @@ class ChatView(QMainWindow):
         # 发送按钮布局
         send_layout = QHBoxLayout()
         send_layout.setSpacing(8)
-        send_layout.setContentsMargins(0, 0, 0, 0)
+        send_layout.setContentsMargins(0, 8, 0, 0)  # 顶部留出间距
+        
+        # 添加工具栏到发送按钮布局中
+        send_layout.addLayout(toolbar_layout)
+        
+        # 添加拉伸空间
         send_layout.addStretch(1)
         
         # 发送按钮
@@ -418,6 +431,10 @@ class ChatView(QMainWindow):
                 "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
             # 添加连接成功的系统消息
             self.add_system_message(f"✓ 已连接到聊天室，欢迎 {self.username}！")
+            
+            # 不自动加载历史消息，改为由用户通过按钮触发
+            # 确保加载按钮可见
+            self.message_area.set_load_button_visible(True)
         else:
             self.bottom_status.setText("连接已断开")
             self.bottom_status.setStyleSheet(
@@ -430,6 +447,40 @@ class ChatView(QMainWindow):
         log.debug(f"视图接收到消息对象: {message_obj}")
         
         try:
+            # 检查是否是消息列表（历史消息）
+            if isinstance(message_obj, list):
+                log.debug(f"视图接收到历史消息列表，共 {len(message_obj)} 条消息")
+                
+                # 如果列表为空，隐藏加载按钮并重置加载状态
+                if not message_obj:
+                    self.message_area.set_load_button_visible(False)
+                    self.message_area._is_loading = False
+                    # 重新启用加载按钮
+                    self.message_area.load_history_btn.setEnabled(True)
+                    return
+                
+                # 服务器返回的消息是按时间正序排列的（最旧的在前面）[oldest, older, ..., newest]
+                # 为了在界面上按时间顺序显示（最旧的在最上面），我们需要反转列表，从最新的历史消息开始插入
+                # 这样最终的显示顺序才是正确的 [oldest, older, ..., newest]
+                reversed_messages = message_obj[::-1]  # 反转列表
+                
+                for msg in reversed_messages:  # 从最新的历史消息开始插入
+                    if hasattr(msg, 'content_type'):
+                        self.message_area.insert_message_at_top(msg)
+                    elif isinstance(msg, dict):
+                        self.message_area.insert_message_at_top(msg)
+                    
+                    # 更新最旧的消息ID - 记录最旧的消息ID（列表中的最后一个消息，即最旧的）
+                    # 因为我们反转了列表，最旧的消息现在是最后一个被处理的
+                    if hasattr(msg, 'message_id') and msg.message_id:
+                        self.message_area._oldest_message_id = msg.message_id
+                
+                # 所有历史消息插入完成后，重置加载状态
+                self.message_area._is_loading = False
+                # 重新启用加载按钮
+                self.message_area.load_history_btn.setEnabled(True)
+                return
+                
             # 检查消息对象类型
             if hasattr(message_obj, 'content_type'):
                 # 如果是VO对象
@@ -460,6 +511,10 @@ class ChatView(QMainWindow):
             import traceback
             traceback.print_exc()
             self.add_system_message("消息处理错误")
+            # 发生异常时也要重置加载状态
+            self.message_area._is_loading = False
+            # 发生异常时也要重新启用加载按钮
+            self.message_area.load_history_btn.setEnabled(True)
 
     def on_user_list_updated(self, users: list):
         """处理用户列表更新"""
@@ -472,12 +527,23 @@ class ChatView(QMainWindow):
         self.bottom_status.setText("已连接到服务器")
         self.bottom_status.setStyleSheet(
             "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
+        
+        # 不自动加载历史消息，改为由用户通过按钮触发
+        # 确保加载按钮可见
+        self.message_area.set_load_button_visible(True)
 
     def on_connection_failed(self, message: str):
         """处理连接失败"""
         self.bottom_status.setText(f"连接失败: {message}")
         self.bottom_status.setStyleSheet(
             "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
+
+    def on_message_sent(self, message_vo):
+        """处理自己发送的消息"""
+        # 在界面中立即显示自己发送的消息
+        self.message_area.add_message(message_vo)
+        # 确保滚动到底部
+        QTimer.singleShot(100, self.message_area.scroll_to_bottom)
 
     def on_file_received(self, filename: str, file_path: str):
         """处理接收到的文件"""
@@ -492,10 +558,14 @@ class ChatView(QMainWindow):
         message = self.message_input.toPlainText().strip()
         if message:
             # 发送到服务器
-            self.controller.send_message(message)
-
-            # 清空输入框
-            self.message_input.clear()
+            success = self.controller.send_message(message)
+            
+            if success:
+                # 发送成功，清空输入框
+                self.message_input.clear()
+            else:
+                # 发送失败，保留消息内容并提示用户
+                self.add_system_message("消息发送失败，请检查网络连接")
 
     def update_input_height(self):
         """自动调整输入框高度"""
@@ -585,6 +655,55 @@ class ChatView(QMainWindow):
     def add_system_message(self, message: str):
         """添加系统消息"""
         self.message_area.add_system_message(message)
+
+    def _load_more_messages(self):
+        """加载更多消息，重写ChatMessageArea的方法"""
+        from common.log import log
+        from PyQt5.QtCore import QTimer
+        log.debug("加载更多历史消息")
+        
+        # 避免重复加载
+        if self.message_area._is_loading:
+            return
+        
+        # 设置加载状态
+        self.message_area._is_loading = True
+        
+        try:
+            # 获取当前最旧的消息ID，如果是首次加载则为None
+            oldest_message_id = self.message_area._oldest_message_id
+            
+            # 调用控制器获取历史消息
+            success = self.controller.get_history_messages(
+                message_id=oldest_message_id,
+                limit=50
+            )
+            
+            if not success:
+                log.error("获取历史消息失败")
+                self.message_area._is_loading = False
+                self.message_area.load_history_btn.setEnabled(False)  # 请求失败，暂时禁用按钮
+                return
+            
+            # 添加超时机制，确保加载状态能正确重置
+            def reset_load_state():
+                if hasattr(self.message_area, '_is_loading') and self.message_area._is_loading:
+                    log.warning("历史消息加载超时，重置加载状态")
+                    self.message_area._is_loading = False
+                    self.message_area.load_history_btn.setEnabled(True)
+            
+            # 设置5秒超时
+            self._load_timeout_timer = QTimer(self)
+            self._load_timeout_timer.setSingleShot(True)
+            self._load_timeout_timer.timeout.connect(reset_load_state)
+            self._load_timeout_timer.start(5000)
+            
+        except Exception as e:
+            log.error(f"加载更多消息时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            self.message_area._is_loading = False
+            self.message_area.load_history_btn.setEnabled(True)
 
     def closeEvent(self, event):
         """窗口关闭事件"""

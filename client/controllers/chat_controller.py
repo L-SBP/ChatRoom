@@ -67,6 +67,9 @@ class ChatController(QObject):
         if self.network_manager.is_connected():
             self.current_user = username
             self.connected = True  # 设置连接状态
+            # 确保网络管理器的连接状态也正确设置
+            if not self.network_manager.connected:
+                self.network_manager.connected = True
             # 主动请求用户列表，确保获取最新的在线用户信息
             self.refresh_user_list()
             return True
@@ -84,8 +87,17 @@ class ChatController(QObject):
         from common.log import log
         
         try:
-            log.debug(f"控制器接收到消息VO: {message_vo}")
+            log.debug(f"控制器接收到消息: {message_vo}")
             
+            # 检查是否是消息列表（历史消息）
+            if isinstance(message_vo, list):
+                log.debug(f"控制器接收到历史消息列表，共 {len(message_vo)} 条消息")
+                # 遍历列表并逐个处理
+                for msg in message_vo:
+                    # 递归调用自己处理单个消息
+                    self.on_message_received(msg)
+                return
+                
             # 确保message_vo是有效的VO对象
             if not hasattr(message_vo, 'content_type'):
                 log.error(f"无效的消息对象: {message_vo}")
@@ -260,3 +272,24 @@ class ChatController(QObject):
             self.network_manager.send_data(request_data)
         else:
             self.system_message.emit("网络连接已断开")
+    
+    def get_history_messages(self, message_id: str = None, limit: int = 50):
+        """获取历史消息"""
+        from common.log import log
+        try:
+            log.debug(f"ChatController.get_history_messages被调用: message_id={message_id}, limit={limit}")
+            if not self.network_manager.is_connected():
+                log.error(f"ChatController.get_history_messages: 未连接到服务器，is_connected={self.network_manager.is_connected()}")
+                self.system_message.emit("未连接到服务器")
+                return False
+            
+            log.debug(f"ChatController.get_history_messages: 调用network_manager.get_history_messages")
+            success = self.network_manager.get_history_messages(message_id, limit)
+            log.debug(f"ChatController.get_history_messages: network_manager.get_history_messages返回: {success}")
+            return success
+        except Exception as e:
+            log.error(f"获取历史消息时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            self.system_message.emit("获取历史消息失败")
+            return False

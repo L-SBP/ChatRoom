@@ -33,9 +33,13 @@ class GlobalMessageCRUD:
         获取最新的num条全局消息
         """
         try:
+            # 获取最新的limit条消息，按时间倒序排列
             query = select(GlobalMessage).order_by(GlobalMessage.created_at.desc()).limit(num)
             result = await db.execute(query)
-            messages = await_only(result.scalars().all())
+            messages = result.scalars().all()
+            messages = list(messages)  # 转换为列表以完成查询
+            # 反转列表，使其按时间正序排列（最旧的消息在最前面）
+            messages.reverse()
             log.info(f"获取最新{num}条全局消息成功: {messages}")
             return messages
         except Exception as e:
@@ -43,14 +47,30 @@ class GlobalMessageCRUD:
             raise e
 
     @staticmethod
-    async def get_before_message(db: AsyncSession, message_id: int, num: int = 50):
+    async def get_before_message(db: AsyncSession, message_id: str, num: int = 50):
         """
         获取这条消息之前的num条消息
         """
         try:
-            query = select(GlobalMessage).where(GlobalMessage.message_id < message_id).order_by(GlobalMessage.message_id.desc()).limit(num)
+            # 首先根据message_id获取对应消息的时间戳
+            current_msg_query = select(GlobalMessage).where(GlobalMessage.message_id == message_id)
+            current_msg_result = await db.execute(current_msg_query)
+            current_msg = current_msg_result.scalar_one_or_none()
+            
+            if current_msg is None:
+                # 如果找不到对应的消息，返回最新的消息
+                return await GlobalMessageCRUD.get_lasted_message(db, num)
+            
+            # 获取该时间戳之前的消息，按时间倒序排列
+            query = select(GlobalMessage).where(
+                GlobalMessage.created_at < current_msg.created_at
+            ).order_by(GlobalMessage.created_at.desc()).limit(num)
+            
             result = await db.execute(query)
-            messages = await_only(result.scalars().all())
+            messages = result.scalars().all()
+            messages = list(messages)  # 转换为列表以完成查询
+            # 反转列表，使其按时间正序排列（最旧的消息在最前面）
+            messages.reverse()
             log.info(f"获取这条消息之前的{num}条消息成功: {messages}")
             return messages
         except Exception as e:
