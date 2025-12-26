@@ -14,7 +14,7 @@ from server.handlers.message_handler import MessageHandler
 from server.handlers.user_handler import UserHandler
 from server.handlers.file_handler import FileHandler
 from server.managers.connection_manager import ConnectionManager
-from common.log import log
+from common.log import server_log as log
 
 
 class RequestDispatcher:

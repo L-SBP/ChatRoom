@@ -10,6 +10,7 @@ import base64
 from typing import Tuple
 
 from common.config import get_server_config
+from common.log import server_log as log
 
 server_config = get_server_config()
 

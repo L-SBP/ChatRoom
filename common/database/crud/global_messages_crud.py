@@ -1,3 +1,6 @@
+from common.database.models.global_messages import GlobalMessage
+
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.util import await_only
@@ -37,7 +40,7 @@ class GlobalMessageCRUD:
             query = select(GlobalMessage).order_by(GlobalMessage.created_at.desc()).limit(num)
             result = await db.execute(query)
             messages = result.scalars().all()
-            messages = list(messages)  # 转换为列表以完成查询
+            messages = list[GlobalMessage](messages)  # 转换为列表以完成查询
             # 反转列表，使其按时间正序排列（最旧的消息在最前面）
             messages.reverse()
             log.info(f"获取最新{num}条全局消息成功: {messages}")

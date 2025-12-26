@@ -9,6 +9,8 @@ from common.database.pg_helper import PgHelper
 from common.database.crud.users_crud import user_crud
 from server.utils.password_utils import password_utils
 
+from common.log import server_log as log
+
 
 class AuthManager:
     """认证管理器 - 负责所有认证相关的业务逻辑"""

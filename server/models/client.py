@@ -8,6 +8,7 @@
 import socket
 import time
 from typing import Dict, Any
+from common.log import server_log as log
 
 
 class Client:

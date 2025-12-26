@@ -9,13 +9,19 @@ import json
 import time
 from typing import List, Optional
 import socket
+import os
+from pathlib import Path
+import datetime
+import base64
 
 from sqlalchemy import select
-from common.log import log
+from common.log import server_log as log
 from common.database.pg_helper import PgHelper
 from common.database.crud.global_messages_crud import GlobalMessageCRUD
 from common.database.crud.users_crud import user_crud
+from common.database.crud.files_crud import FilesCRUD
 from common.database.models.users import Users
+from common.config.profile import Profile
 
 
 class MessageManager:
@@ -25,6 +31,7 @@ class MessageManager:
         self.connection_manager = connection_manager
         self.db_engine = db_engine
         self.message_crud = GlobalMessageCRUD()
+        self.file_crud = FilesCRUD()
 
     async def broadcast_message(self, username: str, message: str, timestamp=None, sender_socket=None) -> None:
         """广播文本消息"""
@@ -46,22 +53,44 @@ class MessageManager:
         await self._broadcast_to_clients(broadcast_message, exclude_socket=sender_socket)
 
     async def broadcast_file(self, username: str, filename: str,
-                             file_data: str, file_size: int, sender_socket=None) -> None:
+                             file_data: str, file_size: int, sender_socket=None, content_type: str = 'file') -> None:
         """广播文件"""
-        # 构造文件消息
+        log.debug(f"MessageManager.broadcast_file 开始广播文件: {filename}, 类型: {content_type}, 大小: {file_size} 字节, 发送者: {username}")
+        
+        # 保存文件到磁盘
+        file_path, file_url = self._save_file_to_disk(username, filename, file_data)
+        
+        # 保存文件元数据到files表
+        file_record = await self._save_file_metadata_to_db(username, filename, file_path, file_url, file_size, content_type)
+        
+        # 构造文件消息 - 包含file_data以便客户端直接保存
         file_message = {
-            'type': 'file',
+            'type': content_type,
             'username': username,
+            'content': filename,  # 添加content字段，客户端需要
             'filename': filename,
-            'data': file_data,
-            'size': file_size
+            'data': file_data,  # 包含文件数据以便客户端保存
+            'size': file_size,
+            'file_url': file_url,
+            'file_id': str(file_record.file_id),
+            'timestamp': time.time()  # 添加timestamp字段，客户端需要
         }
 
-        # 保存到数据库
-        await self._save_file_message_to_db(username, filename, file_size, time.time())
+        # 保存到数据库 - 根据内容类型选择不同的保存方法
+        log.debug(f"MessageManager.broadcast_file 保存{content_type}消息到数据库: {filename}")
+        if content_type == 'image':
+            await self._save_image_message_to_db(username, filename, file_size, time.time(), file_url=file_url, file_id=str(file_record.file_id))
+        elif content_type == 'video':
+            await self._save_video_message_to_db(username, filename, file_size, time.time(), file_url=file_url, file_id=str(file_record.file_id))
+        elif content_type == 'audio':
+            await self._save_audio_message_to_db(username, filename, file_size, time.time(), file_url=file_url, file_id=str(file_record.file_id))
+        else:
+            await self._save_file_message_to_db(username, filename, file_size, time.time(), file_url=file_url, file_id=str(file_record.file_id))
 
         # 发送给所有客户端（除了发送者）
+        log.info(f"MessageManager.broadcast_file 准备广播{content_type}到所有客户端: {filename}")
         await self._broadcast_to_clients(file_message, exclude_socket=sender_socket)
+        log.info(f"MessageManager.broadcast_file {content_type}广播完成: {filename}")
 
     async def broadcast_system_message(self, message: str) -> None:
         """广播系统消息"""
@@ -145,7 +174,7 @@ class MessageManager:
             log.error(f"保存文本消息到数据库失败: {e}")
 
     async def _save_file_message_to_db(self, username: Optional[str], filename: str, 
-                                       file_size: int, timestamp: float) -> None:
+                                       file_size: int, timestamp: float, file_url: str = None, file_id: str = None) -> None:
         """保存文件消息到数据库"""
         try:
             async with PgHelper.get_async_session(self.db_engine) as session:
@@ -159,8 +188,9 @@ class MessageManager:
                     'content_type': 'file',
                     'content': filename,
                     'file_name': filename,
+                    'file_url': file_url,
                     'file_size': file_size,
-                    'metadata_': {'timestamp': timestamp}
+                    'metadata_': {'timestamp': timestamp, 'file_id': file_id}
                 }
 
                 await self.message_crud.create(session, **message_data)
@@ -170,7 +200,7 @@ class MessageManager:
             log.error(f"保存文件消息到数据库失败: {e}")
 
     async def _save_image_message_to_db(self, username: Optional[str], filename: str, 
-                                        file_size: int, timestamp: float) -> None:
+                                        file_size: int, timestamp: float, file_url: str = None, file_id: str = None) -> None:
         """保存图片消息到数据库"""
         try:
             async with PgHelper.get_async_session(self.db_engine) as session:
@@ -184,8 +214,9 @@ class MessageManager:
                     'content_type': 'image',
                     'content': filename,
                     'file_name': filename,
+                    'file_url': file_url,
                     'file_size': file_size,
-                    'metadata_': {'timestamp': timestamp}
+                    'metadata_': {'timestamp': timestamp, 'file_id': file_id}
                 }
 
                 await self.message_crud.create(session, **message_data)
@@ -195,7 +226,7 @@ class MessageManager:
             log.error(f"保存图片消息到数据库失败: {e}")
 
     async def _save_video_message_to_db(self, username: Optional[str], filename: str, 
-                                        file_size: int, timestamp: float) -> None:
+                                        file_size: int, timestamp: float, file_url: str = None, file_id: str = None) -> None:
         """保存视频消息到数据库"""
         try:
             async with PgHelper.get_async_session(self.db_engine) as session:
@@ -209,8 +240,9 @@ class MessageManager:
                     'content_type': 'video',
                     'content': filename,
                     'file_name': filename,
+                    'file_url': file_url,
                     'file_size': file_size,
-                    'metadata_': {'timestamp': timestamp}
+                    'metadata_': {'timestamp': timestamp, 'file_id': file_id}
                 }
 
                 await self.message_crud.create(session, **message_data)
@@ -220,7 +252,7 @@ class MessageManager:
             log.error(f"保存视频消息到数据库失败: {e}")
 
     async def _save_audio_message_to_db(self, username: Optional[str], filename: str, 
-                                        file_size: int, timestamp: float) -> None:
+                                        file_size: int, timestamp: float, file_url: str = None, file_id: str = None) -> None:
         """保存音频消息到数据库"""
         try:
             async with PgHelper.get_async_session(self.db_engine) as session:
@@ -234,8 +266,9 @@ class MessageManager:
                     'content_type': 'audio',
                     'content': filename,
                     'file_name': filename,
+                    'file_url': file_url,
                     'file_size': file_size,
-                    'metadata_': {'timestamp': timestamp}
+                    'metadata_': {'timestamp': timestamp, 'file_id': file_id}
                 }
 
                 await self.message_crud.create(session, **message_data)
@@ -243,6 +276,93 @@ class MessageManager:
 
         except Exception as e:
             log.error(f"保存音频消息到数据库失败: {e}")
+
+    async def _save_file_metadata_to_db(self, username: str, filename: str, file_path: str, file_url: str, file_size: int, content_type: str) -> object:
+        """
+        保存文件元数据到files表
+        """
+        try:
+            async with PgHelper.get_async_session(self.db_engine) as session:
+                # 获取用户ID
+                user = await user_crud.get_by_username(session, username)
+                user_id = user.user_id if user else None
+                
+                # 构造文件元数据
+                file_metadata = {
+                    'user_id': user_id,
+                    'file_name': filename,
+                    'file_path': file_path,
+                    'file_url': file_url,
+                    'file_type': content_type,
+                    'file_size': int(file_size),  # 数据库中定义为bigint类型
+                }
+                
+                # 保存到数据库
+                file_record = await self.file_crud.create(session, **file_metadata)
+                log.info(f"文件元数据已保存到数据库: {filename}")
+                return file_record
+        except Exception as e:
+            log.error(f"保存文件元数据到数据库失败: {e}")
+            raise
+
+    def _save_file_to_disk(self, username: str, filename: str, file_data: str) -> tuple[str, str]:
+        """
+        将文件保存到磁盘，按用户隔离存储
+        返回文件路径和文件URL
+        """
+        # 获取项目根目录
+        project_root = Profile.get_project_root()
+        
+        # 创建按用户和日期组织的存储路径
+        today = datetime.datetime.now()
+        file_storage_path = project_root / "uploads" / username / f"{today.year}" / f"{today.month:02d}" / f"{today.day:02d}"
+        
+        # 确保目录存在
+        file_storage_path.mkdir(parents=True, exist_ok=True)
+        
+        # 处理文件名冲突
+        base_filename, ext = os.path.splitext(filename)
+        final_filename = filename
+        counter = 1
+        while (file_storage_path / final_filename).exists():
+            final_filename = f"{base_filename}_{counter}{ext}"
+            counter += 1
+        
+        # 确保文件名是有效的（处理特殊字符）
+        final_filename = final_filename.encode('utf-8', 'surrogateescape').decode('utf-8', 'surrogateescape')
+        
+        # 完整文件路径
+        file_path = file_storage_path / final_filename
+        
+        # 解码文件数据并写入磁盘
+        try:
+            # 清理base64数据，移除可能的特殊字符（如换行符、空格等）
+            # base64编码应该只包含字母、数字、+、/、=和可能的换行符
+            cleaned_file_data = ''.join(c for c in file_data if c.isalnum() or c in '+/=')
+            
+            # 进行base64解码
+            decoded_data = base64.b64decode(cleaned_file_data)
+            with open(file_path, 'wb') as f:
+                f.write(decoded_data)
+            log.info(f"文件已保存到磁盘: {file_path}")
+        except UnicodeDecodeError as e:
+            log.error(f"文件数据包含非ASCII字符: {e}")
+            raise
+        except base64.binascii.Error as e:
+            log.error(f"base64解码失败: {e}")
+            log.error(f"原始数据长度: {len(file_data)}, 清理后数据长度: {len(cleaned_file_data)}")
+            log.error(f"原始数据前100字符: {file_data[:100]}")
+            raise
+        except Exception as e:
+            log.error(f"保存文件到磁盘失败: {e}")
+            raise
+        
+        # 生成文件URL（相对路径）
+        relative_path = file_path.relative_to(project_root)
+        # 使用正斜杠并确保没有重复的/uploads前缀
+        file_url = f"/{relative_path.as_posix()}"
+        
+        return str(file_path), file_url
 
     async def _save_system_message_to_db(self, content: str, timestamp: float) -> None:
         """保存系统消息到数据库"""

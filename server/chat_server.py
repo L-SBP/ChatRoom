@@ -11,7 +11,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import socket
-import logging
 import asyncio
 from typing import Optional
 
@@ -19,7 +18,7 @@ from common.config.server.config import get_server_config
 from common.database.pg_helper import PgHelper
 from server.handlers.client_handler import ClientHandler
 from server.managers.connection_manager import ConnectionManager
-from common.log import log
+from common.log import server_log as log
 
 
 class ChatServer:

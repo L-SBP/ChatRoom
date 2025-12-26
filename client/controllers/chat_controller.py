@@ -13,6 +13,7 @@ import os
 # 使用VO模型和网络管理器
 from client.models.vo import MessageVO, FileVO
 from client.network.network_manager import NetworkManager
+from common.log import client_log as log
 
 
 class ChatController(QObject):
@@ -84,8 +85,6 @@ class ChatController(QObject):
     
     def on_message_received(self, message_vo):
         """处理接收到的消息"""
-        from common.log import log
-        
         try:
             log.debug(f"控制器接收到消息: {message_vo}")
             
@@ -147,7 +146,6 @@ class ChatController(QObject):
     
     def send_message(self, content: str, receiver: str = None) -> bool:
         """发送消息"""
-        from common.log import log
         try:
             # 检查网络连接状态而不是本地连接状态
             if not self.network_manager.is_connected():
@@ -211,15 +209,50 @@ class ChatController(QObject):
 
     def send_image(self, file_path: str) -> bool:
         """发送图片"""
+        log.debug(f"开始发送图片，文件路径: {file_path}")
+        
         if not self.network_manager.is_connected():
+            log.error("图片发送失败：未连接到服务器")
             self.system_message.emit("未连接到服务器")
             return False
         
+        filename = os.path.basename(file_path)
+        log.info(f"准备发送图片：{filename}")
+        
+        # 创建图片消息VO对象用于本地回显
+        file_vo = FileVO(
+            file_id="",
+            file_name=filename,
+            file_url=file_path,  # 使用本地文件路径
+            file_type="image",
+            file_size=os.path.getsize(file_path),
+            created_at=datetime.now()
+        )
+        
+        message_vo = MessageVO(
+            message_id="",
+            user_id="",
+            username=self.current_user,
+            content_type="image",
+            content=filename,
+            file_vo=file_vo,
+            created_at=datetime.now()
+        )
+        
+        # 立即在界面显示本地回显
+        log.debug(f"发送本地图片回显：{filename}")
+        self.message_sent.emit(message_vo)
+        
+        log.debug(f"调用network_manager.send_file发送图片：{filename}")
         success = self.network_manager.send_file(file_path)  # 复用send_file方法
+        
         if success:
-            self.file_sent.emit(os.path.basename(file_path))
+            log.info(f"图片发送成功：{filename}")
+            self.file_sent.emit(filename)
         else:
+            log.error(f"图片发送失败：{filename}")
             self.system_message.emit("图片发送失败")
+            # 如果发送失败，可能需要从界面移除消息，但这里简单提示用户
         
         return success
 
@@ -273,9 +306,8 @@ class ChatController(QObject):
         else:
             self.system_message.emit("网络连接已断开")
     
-    def get_history_messages(self, message_id: str = None, limit: int = 50):
+    def get_history_messages(self, message_id: str = None, limit: int = 20) -> bool:
         """获取历史消息"""
-        from common.log import log
         try:
             log.debug(f"ChatController.get_history_messages被调用: message_id={message_id}, limit={limit}")
             if not self.network_manager.is_connected():

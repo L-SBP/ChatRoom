@@ -1,4 +1,4 @@
-from sqlalchemy import Column, UUID, VARCHAR, TEXT, Integer, Boolean, DateTime, func, ForeignKey
+from sqlalchemy import Column, UUID, VARCHAR, TEXT, Integer, Boolean, DateTime, func, ForeignKey, BigInteger
 from sqlalchemy.orm import relationship
 
 from common.database.models.base_model import BaseModel
@@ -29,7 +29,7 @@ class File(BaseModel):
 
     mime_type = Column(VARCHAR(100))
 
-    file_size = Column(TEXT)  # BIGINT在SQLAlchemy中映射为TEXT
+    file_size = Column(BigInteger)  # 使用BigInteger类型匹配数据库
 
     width = Column(Integer)
 

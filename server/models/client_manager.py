@@ -8,6 +8,7 @@
 import socket
 from typing import Dict, List
 from server.models.client import Client
+from common.log import server_log as log
 
 
 class ClientManager:

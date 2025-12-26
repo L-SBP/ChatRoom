@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QWidget, QTextEdit, QVBoxLayout, QPushButton
 from PyQt5.QtGui import QTextCursor, QFont
 from PyQt5.QtCore import Qt
 from client.models.vo import MessageVO
-from common.log import log
+from common.log import client_log as log
 
 
 class ChatMessageArea(QWidget):
@@ -184,8 +184,8 @@ class ChatMessageArea(QWidget):
                         file_size_str = format_file_size(file_size)
                         
                         if content_type == 'image':
-                            # 图片消息
-                            return f"<img src='{file_url}' alt='图片' style='max-width: 300px; max-height: 300px; border-radius: 8px;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
+                            # 图片消息 - 使用本地文件路径
+                            return f"<img src='{file_url}' alt='图片' style='max-width: 300px; max-height: 300px; border-radius: 8px; object-fit: cover;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
                         elif content_type == 'video':
                             # 视频消息
                             return f"[视频文件] {file_name} ({file_size_str})"
@@ -193,7 +193,7 @@ class ChatMessageArea(QWidget):
                             # 音频消息
                             return f"[音频文件] {file_name} ({file_size_str})"
                         elif content_type == 'file':
-                            # 文件消息
+                            # 文件文件
                             return f"[文件] {file_name} ({file_size_str})"
                     return "[媒体内容]"
                 else:
@@ -279,7 +279,6 @@ class ChatMessageArea(QWidget):
     
     def insert_message_at_top(self, message):
         """在顶部插入消息"""
-        from common.log import log
         log.debug(f"在顶部插入消息: {message}")
         
         # 保存当前滚动位置

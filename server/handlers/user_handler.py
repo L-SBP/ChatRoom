@@ -8,7 +8,7 @@
 import logging
 from typing import Dict, Any
 from server.managers.connection_manager import ConnectionManager
-from common.log import log
+from common.log import server_log as log
 
 
 class UserHandler:

@@ -8,7 +8,7 @@
 import logging
 from typing import Dict, Any
 from server.managers.connection_manager import ConnectionManager
-from common.log import log
+from common.log import server_log as log
 
 
 class FileHandler:
@@ -23,6 +23,7 @@ class FileHandler:
         filename = request_data.get('filename', '')
         file_data = request_data.get('data', '')
         file_size = request_data.get('size', 0)
+        content_type = request_data.get('type', 'file')  # 默认为'file'类型
         
         # 确保file_size是整数类型
         if isinstance(file_size, str):
@@ -51,7 +52,8 @@ class FileHandler:
                 username=username,
                 filename=filename,
                 file_data=file_data,
-                file_size=file_size
+                file_size=file_size,
+                content_type=content_type
             )
 
             return {

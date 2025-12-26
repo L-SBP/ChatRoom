@@ -11,9 +11,11 @@ import socket
 import json
 import time
 import os
+import base64
 from datetime import datetime
 
 from client.models.vo import MessageVO, FileVO, UserVO
+from common.log import client_log as log
 
 
 class NetworkThread(QThread):
@@ -85,7 +87,6 @@ class NetworkThread(QThread):
     
     def handle_message(self, data: dict):
         """处理接收到的消息"""
-        from common.log import log
         log.debug(f"网络层接收到原始数据: {data}")
         msg_type = data.get('type')
         
@@ -102,6 +103,39 @@ class NetworkThread(QThread):
                 except ValueError:
                     timestamp = time.time()
             
+            # 如果是文件类型消息，需要处理文件数据
+            file_vo = None
+            if content_type in ['image', 'video', 'audio', 'file']:
+                filename = data.get('filename', '')
+                file_url = data.get('file_url', '')
+                file_size = data.get('size', 0)
+                if isinstance(file_size, str):
+                    try:
+                        file_size = int(file_size)
+                    except ValueError:
+                        file_size = 0
+                
+                # 创建文件VO对象
+                file_vo = FileVO(
+                    file_id=data.get('file_id', ''),
+                    file_name=filename,
+                    file_url=file_url,
+                    file_type=content_type,
+                    file_size=file_size,
+                    created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+                )
+                
+                # 如果是服务器转发的消息且有file_data，则保存文件
+                file_data = data.get('data', '')
+                if file_data:
+                    # 保存文件
+                    file_path = self.save_file(filename, file_data)
+                    if file_path:
+                        # 更新file_vo的file_url为本地保存路径
+                        file_vo.file_url = file_path
+                        # 发送文件接收信号
+                        self.file_received.emit(filename, file_path)
+            
             # 创建消息VO对象用于界面展示
             message_vo = MessageVO(
                 message_id=data.get('message_id', ''),
@@ -109,6 +143,7 @@ class NetworkThread(QThread):
                 username=username,
                 content_type=content_type,
                 content=content,
+                file_vo=file_vo,
                 created_at=datetime.fromtimestamp(timestamp) if timestamp else None
             )
             
@@ -207,13 +242,45 @@ class NetworkThread(QThread):
                             # 如果解析失败，使用当前时间
                             created_at = datetime.now()
                     
+                    # 处理文件类型消息
+                    file_vo = None
+                    content_type = msg.get('content_type', 'text')
+                    if content_type in ['image', 'video', 'audio', 'file']:
+                        filename = msg.get('file_name', '') or msg.get('filename', '')
+                        file_size = msg.get('file_size', 0)
+                        if isinstance(file_size, str):
+                            try:
+                                file_size = int(file_size)
+                            except ValueError:
+                                file_size = 0
+                    
+                        # 创建文件VO对象
+                        file_vo = FileVO(
+                            file_id=msg.get('file_id', ''),
+                            file_name=filename,
+                            file_url=msg.get('file_url', ''),
+                            file_type=content_type,
+                            file_size=file_size,
+                            created_at=created_at
+                        )
+                        
+                        # 尝试从本地下载目录查找文件
+                        if filename:
+                            # 构建本地文件路径（与save_file方法一致）
+                            download_dir = os.path.join(os.path.expanduser('~'), 'Downloads', 'ChatRoom')
+                            local_file_path = os.path.join(download_dir, filename)
+                            if os.path.exists(local_file_path):
+                                # 如果本地文件存在，更新file_url为本地路径
+                                file_vo.file_url = local_file_path
+                    
                     # 创建消息VO对象
                     message_vo = MessageVO(
                         message_id=msg.get('message_id', ''),
                         user_id='',
                         username=msg.get('username', ''),
-                        content_type=msg.get('content_type', 'text'),
+                        content_type=content_type,
                         content=msg.get('content', ''),
+                        file_vo=file_vo,
                         created_at=created_at
                     )
                     message_vos.append(message_vo)
@@ -226,13 +293,18 @@ class NetworkThread(QThread):
     
     def login(self, username: str, password: str) -> None:
         """发送登录请求"""
+        log.debug(f"NetworkThread.login 开始发送登录请求: 用户名={username}, running={self.running}, client_socket={self.client_socket}")
         if self.client_socket and self.running:
             login_data = {
                 'type': 'login',
                 'username': username,
                 'password': password
             }
+            log.debug(f"NetworkThread.login 发送登录数据: {login_data}")
             self.send_data(login_data)
+            log.debug(f"NetworkThread.login 登录请求发送完成")
+        else:
+            log.error(f"NetworkThread.login 登录请求发送失败: client_socket={self.client_socket}, running={self.running}")
     
     def register(self, user_vo: UserVO) -> None:
         """发送注册请求"""
@@ -255,7 +327,10 @@ class NetworkThread(QThread):
     
     def send_file(self, file_path: str) -> bool:
         """发送文件"""
+        log.debug(f"NetworkThread.send_file 开始发送文件: {file_path}")
+        
         if not self.client_socket or not self.running:
+            log.error("NetworkThread.send_file 发送失败: 未连接到服务器")
             return False
         
         try:
@@ -265,52 +340,66 @@ class NetworkThread(QThread):
             # 检查文件大小
             max_file_size = 10 * 1024 * 1024  # 10MB
             if len(file_data) > max_file_size:
-                print(f"文件大小超过限制: {len(file_data)} > {max_file_size}")
+                log.error(f"NetworkThread.send_file 文件大小超过限制: {len(file_data)} > {max_file_size}")
                 return False
             
             filename = os.path.basename(file_path)
+            log.info(f"NetworkThread.send_file 发送文件: {filename}, 大小: {len(file_data)} 字节")
+            
+            # 判断文件类型
+            file_extension = os.path.splitext(filename)[1].lower()
+            if file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                file_type = 'image'
+            elif file_extension in ['.mp4', '.avi', '.mov', '.wmv', '.flv']:
+                file_type = 'video'
+            elif file_extension in ['.mp3', '.wav', '.ogg', '.aac']:
+                file_type = 'audio'
+            else:
+                file_type = 'file'
+            
+            log.debug(f"NetworkThread.send_file 文件类型: {file_type}, 扩展名: {file_extension}")
             
             # 创建文件VO对象
             file_vo = FileVO(
                 file_id="",  # 会在服务端生成
                 file_name=filename,
                 file_url="",  # 会在服务端生成
-                file_type="file",
+                file_type=file_type,
                 file_size=len(file_data),  # 确保是整数类型
                 created_at=datetime.now()
             )
             
             # 将VO对象转换为字典进行传输
-            data = file_vo.to_dict()
-            data.update({
-                'type': 'file',
-                'data': file_data.decode('latin-1'),  # 转换为字符串传输
+            data = {
+                'type': file_type,  # 根据文件类型发送不同类型
+                'username': self.username,  # 添加用户名信息
+                'filename': filename,  # 服务器期望的字段名
+                'data': base64.b64encode(file_data).decode('utf-8'),  # 使用base64编码
                 'size': len(file_data)  # 确保是整数类型
-            })
+            }
             
+            log.debug(f"NetworkThread.send_file 准备发送数据: {file_type} 类型, 用户名: {self.username}")
             self.send_data(data)
+            log.info(f"NetworkThread.send_file 文件发送成功: {filename}")
             return True
         except Exception as e:
-            print(f"发送文件失败: {e}")
+            log.error(f"NetworkThread.send_file 发送文件失败: {e}")
             return False
     
     def send_data(self, data: dict):
         """发送数据到服务器"""
         if self.client_socket:
             try:
-                from common.log import log
                 log.debug(f"NetworkThread发送数据: {data}")
                 json_data = json.dumps(data)
                 self.client_socket.send(json_data.encode('utf-8'))
                 log.debug(f"NetworkThread数据发送成功: {data['type']}")
             except Exception as e:
-                from common.log import log
                 log.error(f"NetworkThread发送数据失败: {e}")
                 self.connection_status.emit(False, f"发送数据失败: {str(e)}")
     
     def get_history_messages(self, message_id: str = None, limit: int = 50):
         """获取历史消息"""
-        from common.log import log
         log.debug(f"NetworkThread.get_history_messages被调用: client_socket={self.client_socket}, running={self.running}")
         if self.client_socket and self.running:
             data = {
@@ -423,11 +512,16 @@ class NetworkThread(QThread):
         return None, 0
     
     def save_file(self, filename: str, file_data: str) -> Optional[str]:
-        """保存接收到的文件"""
+        """
+        保存接收到的文件
+        """
+        log.debug(f"NetworkThread.save_file 开始保存文件: {filename}")
+        
         try:
             # 创建接收文件目录
             download_dir = os.path.join(os.path.expanduser('~'), 'Downloads', 'ChatRoom')
             os.makedirs(download_dir, exist_ok=True)
+            log.debug(f"NetworkThread.save_file 保存目录: {download_dir}")
             
             file_path = os.path.join(download_dir, filename)
             
@@ -436,13 +530,18 @@ class NetworkThread(QThread):
                 name, ext = os.path.splitext(filename)
                 timestamp = time.strftime('%Y%m%d_%H%M%S')
                 file_path = os.path.join(download_dir, f"{name}_{timestamp}{ext}")
+                log.debug(f"NetworkThread.save_file 文件已存在，使用新文件名: {os.path.basename(file_path)}")
+            
+            # 对Base64编码的文件数据进行解码
+            decoded_data = base64.b64decode(file_data)
             
             with open(file_path, 'wb') as f:
-                f.write(file_data.encode('latin-1'))
+                f.write(decoded_data)
             
+            log.info(f"NetworkThread.save_file 文件保存成功: {os.path.basename(file_path)}, 保存路径: {file_path}")
             return file_path
         except Exception as e:
-            print(f"保存文件失败: {e}")
+            log.error(f"NetworkThread.save_file 保存文件失败: {e}")
             return None
     
     def close_connection(self):
@@ -569,7 +668,6 @@ class NetworkManager(QObject):
     
     def get_history_messages(self, message_id: str = None, limit: int = 50):
         """获取历史消息"""
-        from common.log import log
         log.debug(f"NetworkManager.get_history_messages被调用: is_connected={self.is_connected()}, network_thread={self.network_thread}, network_thread.isRunning={self.network_thread.isRunning() if self.network_thread else False}, connected={self.connected}")
         if self.is_connected():
             self.network_thread.get_history_messages(message_id, limit)

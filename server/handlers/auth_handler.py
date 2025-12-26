@@ -10,7 +10,7 @@ import socket
 import logging
 from typing import Dict, Any
 
-from common.log import log
+from common.log import server_log as log
 from server.models.client import Client
 from server.managers.connection_manager import ConnectionManager
 

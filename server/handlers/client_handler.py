@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 
-from common.log import log
+from common.log import server_log as log
 from server.models.client import Client
 
 
@@ -49,36 +49,48 @@ class ClientHandler:
             loop = asyncio.get_event_loop()
 
             # 接收认证请求
+            log.debug(f"_handle_authentication 等待接收客户端 {self.client_address} 的认证请求")
             data = await loop.sock_recv(self.client_socket, 1024)
             if not data:
+                log.debug(f"_handle_authentication 未收到客户端 {self.client_address} 的认证数据，连接关闭")
                 return
 
+            log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的认证数据: {data}")
             # 解析请求
             request = json.loads(data.decode('utf-8'))
             request_type = request.get('type')
+            log.debug(f"_handle_authentication 解析客户端 {self.client_address} 的认证请求: {request}")
 
             # 处理不同类型的请求
             if request_type == 'login':
+                log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的登录请求")
                 response = await self._handle_login(request)
                 # 登录成功时，响应已经在_handle_login中发送，返回None
                 if response is not None:
+                    log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的登录失败响应: {response}")
                     await self._send_response(response)
+                else:
+                    log.debug(f"_handle_authentication 客户端 {self.client_address} 登录成功，响应已在_handle_login中发送")
             elif request_type == 'register':
+                log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的注册请求")
                 response = await self._handle_register(request)
+                log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的注册响应: {response}")
                 await self._send_response(response)
             else:
+                log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的未知请求类型: {request_type}")
                 response = {
                     'type': 'error',
                     'success': False,
                     'message': f'未知的请求类型: {request_type}'
                 }
+                log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的错误响应: {response}")
                 await self._send_response(response)
 
         except json.JSONDecodeError:
-            log.warning(f"客户端 {self.client_address} 发送的数据格式错误")
+            log.warning(f"客户端 {self.client_address} 发送的数据格式错误: {data}")
             await self._send_error("无效的消息格式")
         except Exception as e:
-            log.error(f"认证处理失败: {e}")
+            log.error(f"处理客户端 {self.client_address} 认证时出错: {e}")
             await self._send_error("认证失败")
 
     async def _handle_login(self, request: Dict[str, Any]) -> Dict[str, Any]:
@@ -204,7 +216,8 @@ class ClientHandler:
                         # 处理消息
                         if request_type in ['message', 'text']:
                             await self._process_message(request)
-                        elif request_type == 'file':
+                        elif request_type in ['file', 'image', 'video', 'audio']:
+                            # 将所有文件类型的消息都通过_process_file处理
                             await self._process_file(request)
                         elif request_type == 'refresh_users':
                             await self.connection_manager.message_manager.send_user_list_to_client(
@@ -258,6 +271,7 @@ class ClientHandler:
         """处理文件"""
         filename = request.get('filename', '')
         file_data = request.get('data', '')
+        content_type = request.get('type', 'file')  # 默认为'file'类型
         # 确保file_size是整数类型
         file_size = request.get('size', 0)
         if isinstance(file_size, str):
@@ -266,14 +280,21 @@ class ClientHandler:
             except ValueError:
                 file_size = 0
 
+        log.debug(f"ClientHandler._process_file 接收到文件请求: {filename}, 类型: {content_type}, 大小: {file_size} 字节")
+
         if filename and file_data:
+            log.info(f"ClientHandler._process_file 准备广播文件: {filename}, 类型: {content_type}")
             await self.connection_manager.message_manager.broadcast_file(
                 username=self.username,
                 filename=filename,
                 file_data=file_data,
                 file_size=file_size,  # 确保传递的是整数
-                sender_socket=self.client_socket
+                sender_socket=self.client_socket,
+                content_type=content_type
             )
+            log.debug(f"ClientHandler._process_file 广播文件完成: {filename}")
+        else:
+            log.warning(f"ClientHandler._process_file 无效的文件请求: 缺少filename或file_data")
 
     async def _send_response(self, response: Dict[str, Any]) -> None:
         """发送响应给客户端"""

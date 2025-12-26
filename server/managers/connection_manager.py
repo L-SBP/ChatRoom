@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from server.managers.auth_manager import AuthManager
 
 from server.models.client import Client
+from common.log import server_log as log
 
 
 class ConnectionManager:

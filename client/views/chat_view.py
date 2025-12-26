@@ -17,6 +17,7 @@ from client.controllers.chat_controller import ChatController
 from client.models.vo import MessageVO
 from client.views.Widget.ChatMessageArea import ChatMessageArea
 from common.config import get_client_config
+from common.log import client_log as log
 
 client_config = get_client_config()
 
@@ -97,12 +98,6 @@ class ChatView(QMainWindow):
         chat_layout = QVBoxLayout()
         chat_layout.setContentsMargins(15, 15, 10, 15)  # 增加边距，改善视觉效果
         chat_layout.setSpacing(20)  # 增加间距，确保消息区域和输入区域之间有足够空间
-
-        # 聊天标题
-        chat_title = QLabel("聊天室")
-        chat_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.titleSize, QFont.Bold))
-        chat_title.setStyleSheet("color: #000000; padding: 5px 0;")
-        chat_layout.addWidget(chat_title)
 
         # 消息显示区域
         self.message_area = ChatMessageArea(self.username)
@@ -443,7 +438,6 @@ class ChatView(QMainWindow):
 
     def on_message_received(self, message_obj):
         """处理接收到的消息"""
-        from common.log import log
         log.debug(f"视图接收到消息对象: {message_obj}")
         
         try:
@@ -658,7 +652,6 @@ class ChatView(QMainWindow):
 
     def _load_more_messages(self):
         """加载更多消息，重写ChatMessageArea的方法"""
-        from common.log import log
         from PyQt5.QtCore import QTimer
         log.debug("加载更多历史消息")
         
