@@ -13,6 +13,14 @@ import time
 import os
 import base64
 from datetime import datetime
+from io import BytesIO
+
+# 尝试导入Pillow库用于图片压缩
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 from client.models.vo import MessageVO, FileVO, UserVO
 from common.log import client_log as log
@@ -342,6 +350,76 @@ class NetworkThread(QThread):
             if len(file_data) > max_file_size:
                 log.error(f"NetworkThread.send_file 文件大小超过限制: {len(file_data)} > {max_file_size}")
                 return False
+            
+            # 图片压缩处理
+            file_extension = os.path.splitext(file_path)[1].lower()
+            if file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp'] and PIL_AVAILABLE:
+                log.info(f"NetworkThread.send_file 开始压缩图片: {file_path}")
+                
+                # 使用Pillow进行图片压缩
+                try:
+                    # 打开图片
+                    image = Image.open(BytesIO(file_data))
+                    
+                    # 获取原始尺寸
+                    original_width, original_height = image.size
+                    log.debug(f"NetworkThread.send_file 原始图片尺寸: {original_width}x{original_height}")
+                    
+                    # 计算压缩后的尺寸（保持宽高比，最大边不超过800px）
+                    max_size = 800
+                    # 即使图片尺寸小于max_size，也进行一定比例的压缩（如果是大图的话）
+                    if original_width > max_size or original_height > max_size:
+                        ratio = max_size / max(original_width, original_height)
+                        new_width = int(original_width * ratio)
+                        new_height = int(original_height * ratio)
+                    elif original_width > 600 or original_height > 600:
+                        # 对于600-800px的图片，进行轻微压缩
+                        ratio = 0.8  # 缩小20%
+                        new_width = int(original_width * ratio)
+                        new_height = int(original_height * ratio)
+                    else:
+                        # 对于小于600px的图片，保持尺寸不变，只进行质量压缩
+                        new_width, new_height = original_width, original_height
+                    
+                    # 调整图片大小（如果需要的话）
+                    if new_width != original_width or new_height != original_height:
+                        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        log.debug(f"NetworkThread.send_file 压缩后图片尺寸: {new_width}x{new_height}")
+                    
+                    # 保存压缩后的图片到BytesIO对象
+                    compressed_buffer = BytesIO()
+                    
+                    # 根据文件类型设置保存格式和压缩参数
+                    if file_extension in ['.jpg', '.jpeg']:
+                        # JPEG格式可以设置质量，降低质量以提高压缩率
+                        image.save(compressed_buffer, format='JPEG', quality=75, optimize=True, progressive=True)
+                    elif file_extension == '.png':
+                        # PNG格式可以设置压缩级别，提高压缩级别以获得更好的压缩效果
+                        image.save(compressed_buffer, format='PNG', compress_level=9, optimize=True)
+                    elif file_extension == '.gif':
+                        # GIF格式
+                        image.save(compressed_buffer, format='GIF', optimize=True)
+                    else:
+                        # 其他格式使用默认设置
+                        image.save(compressed_buffer, format=image.format, optimize=True)
+                    
+                    # 获取压缩后的文件数据
+                    compressed_data = compressed_buffer.getvalue()
+                    
+                    # 计算压缩率
+                    original_size = len(file_data)
+                    compressed_size = len(compressed_data)
+                    compression_ratio = (1 - compressed_size / original_size) * 100
+                    
+                    log.info(f"NetworkThread.send_file 图片压缩完成: 原始大小 {original_size/1024:.1f}KB -> 压缩后 {compressed_size/1024:.1f}KB ({compression_ratio:.1f}% 压缩率)")
+                    
+                    # 使用压缩后的数据
+                    file_data = compressed_data
+                    
+                except Exception as e:
+                    log.error(f"NetworkThread.send_file 图片压缩失败: {e}")
+                    # 压缩失败时继续使用原始数据
+                    pass
             
             filename = os.path.basename(file_path)
             log.info(f"NetworkThread.send_file 发送文件: {filename}, 大小: {len(file_data)} 字节")

@@ -23,8 +23,8 @@ class ChatMessageArea(QWidget):
         # 主消息显示区域
         self.msg_browser = QTextEdit()
         self.msg_browser.setReadOnly(True)
-        # 调整全局字体大小，从12px增大到14px
-        self.msg_browser.setFont(QFont("Microsoft YaHei", 14))
+        # 调整全局字体大小，从14px减小到13px以显示更多内容
+        self.msg_browser.setFont(QFont("Microsoft YaHei", 12))
         # 设置文档HTML时不解析链接
         self.msg_browser.document().setMetaInformation(self.msg_browser.document().DocumentUrl, "")
         
@@ -33,7 +33,7 @@ class ChatMessageArea(QWidget):
             QTextEdit {
                 background-color: white;
                 border: none;
-                padding: 15px;
+                padding: 10px;
                 font-family: 'Microsoft YaHei';
                 line-height: 1.5;
                 color: #333;
@@ -116,7 +116,7 @@ class ChatMessageArea(QWidget):
         # 调整系统消息字体大小，从12px增大到13px
         message_html = f"<p style='color: #666; font-size: 13px; margin: 8px 0; text-decoration: none;'>[系统消息] {content}</p>"
         # 添加一个空行，保持与普通消息的间隔一致
-        spacing_html = "<p style='height: 10px;'></p>"
+        spacing_html = "<p style='height: 3px;'></p>"
         
         # 将系统消息添加到文档末尾
         full_html = message_html + spacing_html
@@ -184,8 +184,8 @@ class ChatMessageArea(QWidget):
                         file_size_str = format_file_size(file_size)
                         
                         if content_type == 'image':
-                            # 图片消息 - 使用本地文件路径
-                            return f"<img src='{file_url}' alt='图片' style='max-width: 300px; max-height: 300px; border-radius: 8px; object-fit: cover;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
+                            # 图片消息 - 使用本地文件路径，等比例缩小
+                            return f"<img src='{file_url}' alt='图片' width='200' style='max-width: 200px !important; max-height: 200px !important; border-radius: 8px; margin-bottom: 5px; display: inline-block;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
                         elif content_type == 'video':
                             # 视频消息
                             return f"[视频文件] {file_name} ({file_size_str})"
@@ -206,19 +206,19 @@ class ChatMessageArea(QWidget):
             if self._current_user is not None and sender == self._current_user:
                 # 自己发送的消息
                 # 1. 头部信息（左对齐）
-                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>我 {time_str} ✓ 已发送</p>"
+                header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>我 {time_str} ✓ 已发送</p>"
                 # 2. 消息气泡（左对齐，蓝色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #007AFF; color: white; padding: 10px 15px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 # 3. 消息间隔
-                spacing_html = "<p style='height: 10px;'></p>"
+                spacing_html = "<p style='height: 3px;'></p>"
             else:
                 # 他人发送的消息
                 # 1. 头部信息（左对齐）
-                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>{safe_sender} {time_str}</p>"
+                header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>{safe_sender} {time_str}</p>"
                 # 2. 消息气泡（左对齐，灰色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #E9E9EB; color: #333; padding: 10px 15px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 # 3. 消息间隔
-                spacing_html = "<p style='height: 10px;'></p>"
+                spacing_html = "<p style='height: 3px;'></p>"
             
             # 直接将HTML内容添加到文档末尾
             full_html = header_html + bubble_html + spacing_html
@@ -360,7 +360,7 @@ class ChatMessageArea(QWidget):
                         
                         if content_type == 'image':
                             # 图片消息
-                            return f"<img src='{file_url}' alt='图片' style='max-width: 300px; max-height: 300px; border-radius: 8px;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
+                            return f"<img src='{file_url}' alt='图片' style='max-width: 200px !important; max-height: 200px !important; width: auto !important; height: auto !important; border-radius: 8px; object-fit: contain; margin-bottom: 5px; display: inline-block;'><br><small style='color: #666;'>{file_name} ({file_size_str})</small>"
                         elif content_type == 'video':
                             # 视频消息
                             return f"[视频文件] {file_name} ({file_size_str})"
@@ -380,14 +380,14 @@ class ChatMessageArea(QWidget):
             # 使用与add_message相同的HTML结构
             if self._current_user is not None and sender == self._current_user:
                 # 自己发送的消息
-                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>我 {time_str} ✓ 已发送</p>"
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #007AFF; color: white; padding: 10px 15px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
-                spacing_html = "<p style='height: 10px;'></p>"
+                header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>我 {time_str} ✓ 已发送</p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                spacing_html = "<p style='height: 3px;'></p>"
             else:
                 # 他人发送的消息
-                header_html = f"<p style='text-align: left; color: #888; font-size: 14px; margin: 5px 0;'>{safe_sender} {time_str}</p>"
-                bubble_html = f"<p style='text-align: left; margin: 5px 0;'><span style='background: #E9E9EB; color: #333; padding: 10px 15px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
-                spacing_html = "<p style='height: 10px;'></p>"
+                header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>{safe_sender} {time_str}</p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                spacing_html = "<p style='height: 3px;'></p>"
             
             # 插入HTML内容
             self.msg_browser.insertHtml(header_html + bubble_html + spacing_html)

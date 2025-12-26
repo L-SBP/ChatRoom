@@ -116,18 +116,18 @@ class ChatView(QMainWindow):
             background-color: #ffffff;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
-            padding: 12px;
+            padding: 4px;
         """)
         
         # 输入区域垂直布局
         input_layout = QVBoxLayout(input_container)
-        input_layout.setSpacing(8)  # 设置元素间距
+        input_layout.setSpacing(4)  # 设置元素间距
         input_layout.setContentsMargins(0, 0, 0, 0)
 
         # 媒体工具栏按钮（在输入框上方）
         toolbar_layout = QHBoxLayout()
-        toolbar_layout.setSpacing(8)
-        toolbar_layout.setContentsMargins(0, 0, 0, 8)  # 底部留出间距
+        toolbar_layout.setSpacing(4)
+        toolbar_layout.setContentsMargins(0, 0, 0, 4)  # 底部留出间距
 
         # 语音发送按钮
         self.voice_btn = QToolButton()
@@ -239,12 +239,12 @@ class ChatView(QMainWindow):
         self.message_input.setTabChangesFocus(True)
         self.message_input.textChanged.connect(self.update_input_height)
         self.message_input.installEventFilter(self)
-        self.message_input.setMinimumHeight(72)  # 设置为大约2行高度
-        self.message_input.setMaximumHeight(108)  # 设置为大约3行高度
+        self.message_input.setMinimumHeight(48)  # 设置为大约2行高度
+        self.message_input.setMaximumHeight(60)  # 设置为大约2行高度
         # 设置样式表，避免使用f-string的花括号转义问题
         self.message_input.setStyleSheet("""
             QTextEdit {
-                padding: 10px 14px;
+                padding: 4px 8px;
                 border: 1px solid #ddd;
                 border-radius: 20px;
                 background-color: #ffffff;
@@ -255,8 +255,8 @@ class ChatView(QMainWindow):
 
         # 发送按钮布局
         send_layout = QHBoxLayout()
-        send_layout.setSpacing(8)
-        send_layout.setContentsMargins(0, 8, 0, 0)  # 顶部留出间距
+        send_layout.setSpacing(4)
+        send_layout.setContentsMargins(0, 0, 0, 0)  # 顶部不留间距
         
         # 添加工具栏到发送按钮布局中
         send_layout.addLayout(toolbar_layout)
@@ -268,14 +268,14 @@ class ChatView(QMainWindow):
         self.send_btn = QPushButton("发送(S)")
         self.send_btn.setMinimumWidth(100)
         self.send_btn.setMaximumWidth(140)
-        self.send_btn.setMinimumHeight(38)  # 增加按钮高度
+        self.send_btn.setMinimumHeight(26)  # 增加按钮高度
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                padding: 10px 20px;
+                padding: 4px 10px;
                 border-radius: 20px;
                 font-weight: bold;
                 font-size: 14px;
