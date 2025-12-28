@@ -11,7 +11,7 @@ from datetime import datetime
 import os
 
 # 使用VO模型和网络管理器
-from client.models.vo import MessageVO, FileVO
+from client.models.vo import MessageVO, FileVO, PrivateMessageVO
 from client.network.network_manager import NetworkManager
 from common.log import client_log as log
 
@@ -36,124 +36,50 @@ class ChatController(QObject):
         self.network_manager.message_received.connect(self.on_message_received)
         self.network_manager.user_list_updated.connect(self.on_user_list_updated)
         self.network_manager.connection_status.connect(self.on_connection_status)
-        self.network_manager.file_received.connect(self.on_file_received)
+        self.network_manager.login_response.connect(self.on_login_response)
+        self.network_manager.register_response.connect(self.on_register_response)
+        self.network_manager.system_message.connect(self.on_system_message)
         
-        self.connected = False
-        self.current_user = None
-        self.server_host = None
-        self.server_port = None
-        self.online_users = []
+        # 用户列表
+        self.online_users: List[str] = []
+        self.current_user: str = ""
+        self.connected: bool = False
+        
+        # 私聊窗口字典
+        self.private_chat_windows = {}
     
     def connect_to_server(self, server_host: str, server_port: int, username: str, password: str) -> bool:
-        """连接到服务器并登录"""
-        self.server_host = server_host
-        self.server_port = server_port
-        self.current_user = username
-        
-        # 检查是否已经连接
-        if self.network_manager.is_connected():
-            # 已经连接，直接登录
+        """连接到服务器"""
+        # 连接服务器
+        success = self.network_manager.connect_to_server(server_host, server_port)
+        if success:
+            # 登录
             self.network_manager.login(username, password)
             return True
-        else:
-            # 尚未连接，先建立连接
-            success = self.network_manager.connect_to_server(server_host, server_port)
-            if success:
-                # 连接成功后进行登录
-                self.network_manager.login(username, password)
-            return success
+        return False
     
     def use_existing_connection(self, username: str) -> bool:
-        """使用现有的连接"""
+        """使用现有连接"""
         if self.network_manager.is_connected():
             self.current_user = username
-            self.connected = True  # 设置连接状态
-            # 确保网络管理器的连接状态也正确设置
-            if not self.network_manager.connected:
-                self.network_manager.connected = True
-            # 主动请求用户列表，确保获取最新的在线用户信息
+            self.connected = True
+            self.connection_established.emit()
+            # 获取用户列表
             self.refresh_user_list()
             return True
         return False
     
-    def disconnect_from_server(self):
-        """断开与服务器的连接"""
-        # 只是清理本地状态，不关闭网络连接
-        self.connected = False
-        self.current_user = None
-        self.online_users = []
-    
-    def on_message_received(self, message_vo):
-        """处理接收到的消息"""
-        try:
-            log.debug(f"控制器接收到消息: {message_vo}")
-            
-            # 检查是否是消息列表（历史消息）
-            if isinstance(message_vo, list):
-                log.debug(f"控制器接收到历史消息列表，共 {len(message_vo)} 条消息")
-                # 遍历列表并逐个处理
-                for msg in message_vo:
-                    # 递归调用自己处理单个消息
-                    self.on_message_received(msg)
-                return
-                
-            # 确保message_vo是有效的VO对象
-            if not hasattr(message_vo, 'content_type'):
-                log.error(f"无效的消息对象: {message_vo}")
-                return
-                
-            content_type = message_vo.content_type
-            
-            if content_type == "system":
-                # 系统消息
-                content = getattr(message_vo, 'content', '')
-                log.debug(f"控制器处理系统消息: {content}")
-                self.system_message.emit(content)
-            elif content_type == "user_list":
-                # 用户列表更新
-                if hasattr(message_vo, 'content'):
-                    self.online_users = message_vo.content
-                    self.user_list_updated.emit(self.online_users)
-                    log.debug(f"用户列表更新: {len(self.online_users)} 个用户")
-            else:
-                # 其他消息
-                log.debug(f"控制器转发普通消息: {message_vo.username}: {message_vo.content}")
-                self.message_received.emit(message_vo)
-                
-        except Exception as e:
-            log.error(f"控制器处理消息时出错: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def on_user_list_updated(self, users: list):
-        """处理用户列表更新"""
-        self.online_users = users
-        self.user_list_updated.emit(users)
-    
-    def on_connection_status(self, success: bool, message: str):
-        """处理连接状态变化"""
-        if success:
-            self.connected = True
-            self.connection_established.emit()
-        else:
-            self.connected = False
-            self.connection_failed.emit(message)
-    
-    def on_file_received(self, filename: str, file_path: str):
-        """处理接收到的文件"""
-        self.file_received.emit(filename, file_path)
-        self.system_message.emit(f"文件 '{filename}' 已接收并保存到: {file_path}")
-    
-    def send_message(self, content: str, receiver: str = None) -> bool:
+    def send_message(self, content: str) -> bool:
         """发送消息"""
         try:
-            # 检查网络连接状态而不是本地连接状态
             if not self.network_manager.is_connected():
                 self.system_message.emit("未连接到服务器")
                 return False
             
-            log.debug(f"控制器准备发送消息: {content}")
-            # 创建消息VO对象用于界面展示
+            if not content.strip():
+                self.system_message.emit("消息内容不能为空")
+                return False
+            
             message_vo = MessageVO(
                 message_id="",  # 会在服务端生成
                 user_id="",     # 会在服务端设置
@@ -175,6 +101,56 @@ class ChatController(QObject):
             return success
         except Exception as e:
             log.error(f"发送消息时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def send_private_message(self, receiver: str, content: str, conversation_id: str = "") -> bool:
+        """发送私聊消息"""
+        try:
+            if not self.network_manager.is_connected():
+                self.system_message.emit("未连接到服务器")
+                return False
+            
+            if not content.strip():
+                self.system_message.emit("私聊消息内容不能为空")
+                return False
+            
+            if not receiver:
+                self.system_message.emit("请选择接收者")
+                return False
+            
+            # 创建私聊消息VO对象
+            private_message_vo = PrivateMessageVO(
+                message_id="",  # 会在服务端生成
+                user_id="",     # 会在服务端设置
+                username=self.current_user,
+                receiver_name=receiver,
+                content_type="text",
+                content=content,
+                conversation_id=conversation_id,
+                created_at=datetime.now()
+            )
+            
+            # 构造私聊消息数据
+            data = {
+                'type': 'private',  # 私聊消息类型
+                'message_type': 'private',  # 明确指定为私聊
+                'username': self.current_user,
+                'receiver': receiver,
+                'content_type': 'text',
+                'content': content,
+                'timestamp': datetime.now().timestamp()
+            }
+            
+            # 发送私聊消息
+            self.network_manager.send_data(data)
+            self.message_sent.emit(private_message_vo)
+            log.debug(f"私聊消息发送成功: {self.current_user} -> {receiver}, 内容: {content}")
+            
+            return True
+        except Exception as e:
+            log.error(f"发送私聊消息时发生错误: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -284,7 +260,7 @@ class ChatController(QObject):
             self.system_message.emit("用户不在线")
             return False
         
-        # 可以在这里实现私聊逻辑
+        # 这里可以启动私聊窗口，或者在视图层处理
         self.system_message.emit(f"开始与 {username} 私聊")
         return True
     
@@ -295,33 +271,105 @@ class ChatController(QObject):
             return
         
         # 通过网络管理器发送用户列表请求
-        if self.network_manager.is_connected():
-            # 发送获取用户列表的请求
-            # 这里可以发送一个特殊的消息类型来请求用户列表
-            request_data = {
-                'type': 'get_users',
-                'username': self.current_user
-            }
-            self.network_manager.send_data(request_data)
-        else:
-            self.system_message.emit("网络连接已断开")
+        data = {'type': 'refresh_users'}
+        self.network_manager.send_data(data)
     
-    def get_history_messages(self, message_id: str = None, limit: int = 20) -> bool:
+    def get_history_messages(self, message_id: str = None, limit: int = 50) -> bool:
         """获取历史消息"""
+        return self.network_manager.get_history_messages(message_id, limit)
+    
+    def on_message_received(self, message_obj):
+        """处理接收到的消息"""
         try:
-            log.debug(f"ChatController.get_history_messages被调用: message_id={message_id}, limit={limit}")
-            if not self.network_manager.is_connected():
-                log.error(f"ChatController.get_history_messages: 未连接到服务器，is_connected={self.network_manager.is_connected()}")
-                self.system_message.emit("未连接到服务器")
-                return False
+            if isinstance(message_obj, list):
+                # 历史消息列表
+                for msg in message_obj:
+                    self.message_received.emit(msg)
+                return
             
-            log.debug(f"ChatController.get_history_messages: 调用network_manager.get_history_messages")
-            success = self.network_manager.get_history_messages(message_id, limit)
-            log.debug(f"ChatController.get_history_messages: network_manager.get_history_messages返回: {success}")
-            return success
+            # 检查是否为私聊消息
+            if hasattr(message_obj, 'content_type') and hasattr(message_obj, 'receiver_name'):
+                if message_obj.content_type == 'private' or hasattr(message_obj, 'receiver_name'):
+                    # 私聊消息
+                    self.message_received.emit(message_obj)
+                    return
+            
+            # 普通消息处理
+            if hasattr(message_obj, 'content_type'):
+                # VO对象
+                self.message_received.emit(message_obj)
+            elif isinstance(message_obj, dict):
+                msg_type = message_obj.get('type', '')
+                if msg_type == 'private':
+                    # 处理私聊消息
+                    from client.models.vo import PrivateMessageVO
+                    private_message_vo = PrivateMessageVO(
+                        message_id=message_obj.get('message_id', ''),
+                        user_id=message_obj.get('user_id', ''),
+                        username=message_obj.get('username', ''),
+                        receiver_name=message_obj.get('receiver', ''),
+                        content_type=message_obj.get('content_type', 'text'),
+                        content=message_obj.get('content', ''),
+                        conversation_id=message_obj.get('conversation_id', ''),
+                        created_at=datetime.fromtimestamp(message_obj.get('timestamp', datetime.now().timestamp()))
+                    )
+                    # 如果是文件类型消息，添加文件信息
+                    if message_obj.get('content_type') in ['image', 'video', 'file', 'audio']:
+                        from client.models.vo import FileVO
+                        file_vo = FileVO(
+                            file_name=message_obj.get('filename', ''),
+                            file_url=message_obj.get('file_url', ''),
+                            file_type=message_obj.get('content_type', 'file'),
+                            file_size=message_obj.get('size', 0),
+                            created_at=datetime.fromtimestamp(message_obj.get('timestamp', datetime.now().timestamp()))
+                        )
+                        private_message_vo.file_vo = file_vo
+                    
+                    self.message_received.emit(private_message_vo)
+                elif msg_type in ['text', 'image', 'video', 'file', 'audio', 'system']:
+                    # 普通消息
+                    message_vo = MessageVO.from_dict(message_obj)
+                    self.message_received.emit(message_vo)
+                else:
+                    log.error(f"未知的消息类型: {msg_type}")
+            else:
+                log.error(f"未知的消息格式: {type(message_obj)}")
+                
         except Exception as e:
-            log.error(f"获取历史消息时发生错误: {e}")
+            log.error(f"处理接收到的消息时出错: {e}")
             import traceback
             traceback.print_exc()
-            self.system_message.emit("获取历史消息失败")
-            return False
+    
+    def on_user_list_updated(self, users: list):
+        """处理用户列表更新"""
+        self.online_users = users
+        self.user_list_updated.emit(users)
+        log.debug(f"用户列表更新: {users}")
+    
+    def on_connection_status(self, success: bool, message: str):
+        """处理连接状态变化"""
+        self.connected = success
+        if success:
+            self.connection_established.emit()
+        else:
+            self.connection_failed.emit(message)
+    
+    def on_login_response(self, success: bool, message: str):
+        """处理登录响应"""
+        if success:
+            # 登录成功，设置当前用户
+            self.connected = True
+            self.connection_established.emit()
+        else:
+            self.connection_failed.emit(message)
+    
+    def on_register_response(self, success: bool, message: str):
+        """处理注册响应"""
+        if success:
+            self.system_message.emit("注册成功")
+        else:
+            self.system_message.emit(f"注册失败: {message}")
+    
+    def on_system_message(self, message: str):
+        """处理系统消息"""
+        self.system_message.emit(message)

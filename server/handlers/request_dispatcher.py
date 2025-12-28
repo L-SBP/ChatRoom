@@ -38,6 +38,7 @@ class RequestDispatcher:
             'video': self.message_handler.handle_message,
             'file': self.message_handler.handle_message,
             'audio': self.message_handler.handle_message,
+            'private': self.message_handler.handle_message,  # 添加私聊消息路由
             'refresh_users': self.user_handler.handle_refresh_users,
             'logout': self.auth_handler.handle_logout,
             'get_history': self.message_handler.handle_get_history,

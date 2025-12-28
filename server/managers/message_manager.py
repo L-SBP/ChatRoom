@@ -22,6 +22,8 @@ from common.database.crud.users_crud import user_crud
 from common.database.crud.files_crud import FilesCRUD
 from common.database.models.users import Users
 from common.config.profile import Profile
+from common.database.crud.private_messages_crud import PrivateMessageCRUD
+from common.database.crud.private_conversations_crud import PrivateConversationCRUD
 
 
 class MessageManager:
@@ -32,6 +34,8 @@ class MessageManager:
         self.db_engine = db_engine
         self.message_crud = GlobalMessageCRUD()
         self.file_crud = FilesCRUD()
+        self.private_message_crud = PrivateMessageCRUD()
+        self.private_conversation_crud = PrivateConversationCRUD()
 
     async def broadcast_message(self, username: str, message: str, timestamp=None, sender_socket=None) -> None:
         """广播文本消息"""
@@ -51,6 +55,97 @@ class MessageManager:
 
         # 发送给所有客户端（除了发送者）
         await self._broadcast_to_clients(broadcast_message, exclude_socket=sender_socket)
+
+    async def send_private_message(self, sender_username: str, receiver_username: str, content: str, 
+                                 content_type: str = 'text', timestamp=None, file_data: str = None, 
+                                 filename: str = None, file_size: int = 0) -> bool:
+        """发送私聊消息"""
+        if timestamp is None:
+            timestamp = time.time()
+
+        # 获取发送者和接收者信息
+        async with PgHelper.get_async_session(self.db_engine) as session:
+            sender = await user_crud.get_by_username(session, sender_username)
+            receiver = await user_crud.get_by_username(session, receiver_username)
+            
+            if not sender or not receiver:
+                log.error(f"发送私聊消息失败: 用户不存在 - {sender_username} -> {receiver_username}")
+                return False
+
+            # 获取或创建私聊会话
+            conversation = await self.private_conversation_crud.get_by_users(
+                session, str(sender.user_id), str(receiver.user_id)
+            )
+            if not conversation:
+                # 创建新的私聊会话
+                conversation = await self.private_conversation_crud.create(
+                    session,
+                    user1_id=min(str(sender.user_id), str(receiver.user_id)),
+                    user2_id=max(str(sender.user_id), str(receiver.user_id))
+                )
+
+            # 构造私聊消息
+            private_message = {
+                'type': 'private',
+                'message_type': 'private',
+                'username': sender_username,
+                'receiver': receiver_username,
+                'content': content,
+                'content_type': content_type,
+                'timestamp': time.strftime('%H:%M:%S', time.localtime(timestamp))
+            }
+
+            # 如果是文件类型，添加文件相关信息
+            if content_type in ['image', 'video', 'file', 'audio'] and filename:
+                private_message.update({
+                    'filename': filename,
+                    'data': file_data,
+                    'size': file_size
+                })
+
+            # 保存私聊消息到数据库
+            message_data = {
+                'conversation_id': str(conversation.conversation_id),
+                'sender_id': str(sender.user_id),
+                'receiver_id': str(receiver.user_id),
+                'content_type': content_type,
+                'content': content,
+                'metadata_': {'timestamp': timestamp}
+            }
+
+            # 如果是文件类型，添加文件信息
+            if content_type in ['image', 'video', 'file', 'audio'] and filename:
+                message_data.update({
+                    'file_name': filename,
+                    'file_size': str(file_size) if file_size else '0'
+                })
+
+            saved_message = await self.private_message_crud.create(session, **message_data)
+
+            # 更新会话的最后消息信息
+            await self.private_conversation_crud.update_last_message(
+                session, str(conversation.conversation_id), str(saved_message.message_id)
+            )
+
+        # 检查接收者是否在线
+        if self.connection_manager.is_client_connected(receiver_username):
+            # 获取接收者的socket连接
+            receiver_client = self.connection_manager.get_client_by_username(receiver_username)
+            if receiver_client:
+                try:
+                    # 发送私聊消息给接收者
+                    receiver_client.socket.send(json.dumps(private_message).encode('utf-8'))
+                    log.info(f"私聊消息已发送: {sender_username} -> {receiver_username}")
+                    return True
+                except Exception as e:
+                    log.error(f"发送私聊消息给 {receiver_username} 失败: {e}")
+                    return False
+            else:
+                log.error(f"无法找到接收者 {receiver_username} 的客户端信息")
+                return False
+        else:
+            log.info(f"接收者 {receiver_username} 不在线，消息已保存到数据库")
+            return True  # 消息已保存到数据库，返回True表示处理成功
 
     async def broadcast_file(self, username: str, filename: str,
                              file_data: str, file_size: int, sender_socket=None, content_type: str = 'file') -> None:

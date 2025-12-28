@@ -151,8 +151,13 @@ class PrivateChatWindow(QMainWindow):
     def add_private_message(self, message: PrivateMessageVO):
         """添加私聊消息"""
         if isinstance(message, PrivateMessageVO):
-            # 调用消息区域的添加消息方法
-            self.message_area.add_message(message)
+            # 根据消息发送者判断显示样式
+            if message.username == self.current_user:
+                # 自己发送的消息
+                self.message_area.add_message(message, is_own=True)
+            else:
+                # 接收的消息
+                self.message_area.add_message(message, is_own=False)
             # 滚动到底部
             self.message_area.scroll_to_bottom()
             log.debug(f"添加私聊消息: {message.content[:50]}...")

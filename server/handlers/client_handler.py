@@ -8,6 +8,7 @@
 import json
 import socket
 import asyncio
+import time
 import logging
 from typing import Dict, Any, Optional
 
@@ -219,6 +220,8 @@ class ClientHandler:
                         elif request_type in ['file', 'image', 'video', 'audio']:
                             # 将所有文件类型的消息都通过_process_file处理
                             await self._process_file(request)
+                        elif request_type == 'private':  # 处理私聊消息
+                            await self._process_private_message(request)
                         elif request_type == 'refresh_users':
                             await self.connection_manager.message_manager.send_user_list_to_client(
                                 self.client_socket
@@ -266,6 +269,54 @@ class ClientHandler:
                 timestamp=timestamp,
                 sender_socket=self.client_socket
             )
+
+    async def _process_private_message(self, request: Dict[str, Any]) -> None:
+        """处理私聊消息"""
+        message = request.get('content', '')
+        receiver = request.get('receiver', '')
+        content_type = request.get('content_type', 'text')
+        timestamp = request.get('timestamp', time.time())
+
+        if not message.strip():
+            await self._send_response({
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息内容不能为空'
+            })
+            return
+
+        if not receiver:
+            await self._send_response({
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息必须指定接收者'
+            })
+            return
+
+        # 检查接收者是否在线
+        if not self.connection_manager.is_client_connected(receiver):
+            await self._send_response({
+                'type': 'error',
+                'success': False,
+                'message': f'用户 {receiver} 不在线'
+            })
+            return
+
+        # 通过请求分发器处理私聊消息
+        try:
+            from server.handlers.request_dispatcher import RequestDispatcher
+            dispatcher = RequestDispatcher(self.connection_manager)
+            response = await dispatcher.dispatch('private', request, self.client_socket, self.client_address)
+            
+            if response:
+                await self._send_response(response)
+        except Exception as e:
+            log.error(f"处理私聊消息时出错: {e}")
+            await self._send_response({
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息发送失败'
+            })
 
     async def _process_file(self, request: Dict[str, Any]) -> None:
         """处理文件"""

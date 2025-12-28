@@ -17,13 +17,82 @@ class MessageHandler:
     def __init__(self, connection_manager: ConnectionManager):
         self.connection_manager = connection_manager
 
-    async def handle_message(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def handle_message(self, request_data: Dict[str, Any], client_socket=None) -> Dict[str, Any]:
         """处理消息请求（支持多种消息类型）"""
         username = request_data.get('username')
         content_type = request_data.get('content_type', 'text')
         content = request_data.get('content', '')
         timestamp = request_data.get('timestamp', time.time())
 
+        # 检查是否为私聊消息
+        message_type = request_data.get('message_type', 'public')
+        if message_type == 'private':
+            # 处理私聊消息
+            receiver = request_data.get('receiver')
+            if not receiver:
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '私聊消息必须指定接收者'
+                }
+
+            if not username or not self.connection_manager.is_client_connected(username):
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '用户未登录'
+                }
+
+            if not content.strip():
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '消息内容不能为空'
+                }
+
+            # 检查接收者是否在线
+            if not self.connection_manager.is_client_connected(receiver):
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': f'用户 {receiver} 不在线'
+                }
+
+            try:
+                # 发送私聊消息
+                success = await self.connection_manager.message_manager.send_private_message(
+                    sender_username=username,
+                    receiver_username=receiver,
+                    content=content,
+                    content_type=content_type,
+                    timestamp=timestamp,
+                    file_data=request_data.get('data', ''),
+                    filename=request_data.get('filename', ''),
+                    file_size=request_data.get('size', 0)
+                )
+
+                if success:
+                    return {
+                        'type': 'private_message_sent',
+                        'success': True,
+                        'message': '私聊消息发送成功'
+                    }
+                else:
+                    return {
+                        'type': 'error',
+                        'success': False,
+                        'message': '私聊消息发送失败'
+                    }
+
+            except Exception as e:
+                log.error(f"私聊消息处理失败: {e}")
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '私聊消息发送失败'
+                }
+
+        # 处理普通消息（公共消息）
         if not username or not self.connection_manager.is_client_connected(username):
             return {
                 'type': 'error',
@@ -45,7 +114,8 @@ class MessageHandler:
                 await self.connection_manager.message_manager.broadcast_message(
                     username=username,
                     message=content,
-                    timestamp=timestamp
+                    timestamp=timestamp,
+                    sender_socket=client_socket
                 )
             elif content_type in ['image', 'video', 'file', 'audio']:
                 # 广播文件消息
@@ -64,7 +134,9 @@ class MessageHandler:
                     username=username,
                     filename=filename,
                     file_data=file_data,
-                    file_size=file_size
+                    file_size=file_size,
+                    sender_socket=client_socket,
+                    content_type=content_type
                 )
             else:
                 return {

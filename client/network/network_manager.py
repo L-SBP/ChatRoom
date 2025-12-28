@@ -157,6 +157,70 @@ class NetworkThread(QThread):
             
             self.message_received.emit(message_vo)
             
+        elif msg_type == 'private':
+            # 处理私聊消息
+            username = data.get('username', '')
+            receiver = data.get('receiver', '')
+            content = data.get('content', '')
+            content_type = data.get('content_type', 'text')
+            timestamp = data.get('timestamp', time.time())
+            
+            # 确保timestamp是数值类型
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = float(timestamp)
+                except ValueError:
+                    timestamp = time.time()
+            
+            # 创建私聊消息VO对象
+            from client.models.vo import PrivateMessageVO
+            private_message_vo = PrivateMessageVO(
+                message_id=data.get('message_id', ''),
+                user_id=data.get('user_id', ''),
+                username=username,
+                receiver_name=receiver,
+                content_type=content_type,
+                content=content,
+                conversation_id=data.get('conversation_id', ''),
+                created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+            )
+            
+            # 如果是文件类型消息，需要处理文件数据
+            if content_type in ['image', 'video', 'audio', 'file']:
+                filename = data.get('filename', '')
+                file_url = data.get('file_url', '')
+                file_size = data.get('size', 0)
+                if isinstance(file_size, str):
+                    try:
+                        file_size = int(file_size)
+                    except ValueError:
+                        file_size = 0
+                
+                # 创建文件VO对象
+                file_vo = FileVO(
+                    file_id=data.get('file_id', ''),
+                    file_name=filename,
+                    file_url=file_url,
+                    file_type=content_type,
+                    file_size=file_size,
+                    created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+                )
+                
+                # 如果是服务器转发的消息且有file_data，则保存文件
+                file_data = data.get('data', '')
+                if file_data:
+                    # 保存文件
+                    file_path = self.save_file(filename, file_data)
+                    if file_path:
+                        # 更新file_vo的file_url为本地保存路径
+                        file_vo.file_url = file_path
+                        # 发送文件接收信号
+                        self.file_received.emit(filename, file_path)
+                
+                private_message_vo.file_vo = file_vo
+            
+            self.message_received.emit(private_message_vo)
+
         elif msg_type == 'user_list':
             users = data.get('users', [])
             self.user_list_updated.emit(users)
