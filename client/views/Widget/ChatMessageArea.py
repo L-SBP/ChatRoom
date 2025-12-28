@@ -33,7 +33,7 @@ class ChatMessageArea(QWidget):
             QTextEdit {
                 background-color: white;
                 border: none;
-                padding: 10px;
+                padding: 6px;
                 font-family: 'Microsoft YaHei';
                 line-height: 1.5;
                 color: #333;
@@ -55,10 +55,10 @@ class ChatMessageArea(QWidget):
                 color: #000000;
                 border: 1px solid #ccc;
                 border-radius: 4px;
-                padding: 8px 16px;
-                margin: 5px auto;
+                padding: 4px 12px;
+                margin: 3px auto;
                 font-family: 'Microsoft YaHei';
-                font-size: 13px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #d0d0d0;
@@ -208,7 +208,7 @@ class ChatMessageArea(QWidget):
                 # 1. 头部信息（左对齐）
                 header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>我 {time_str} ✓ 已发送</p>"
                 # 2. 消息气泡（左对齐，蓝色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 4px 8px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 # 3. 消息间隔
                 spacing_html = "<p style='height: 3px;'></p>"
             else:
@@ -216,7 +216,7 @@ class ChatMessageArea(QWidget):
                 # 1. 头部信息（左对齐）
                 header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>{safe_sender} {time_str}</p>"
                 # 2. 消息气泡（左对齐，灰色背景，圆角）
-                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 4px 8px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 # 3. 消息间隔
                 spacing_html = "<p style='height: 3px;'></p>"
             
@@ -276,6 +276,12 @@ class ChatMessageArea(QWidget):
         self.msg_browser.verticalScrollBar().setValue(
             self.msg_browser.verticalScrollBar().maximum()
         )
+    
+    def should_auto_scroll(self):
+        """判断是否应该自动滚动到底部"""
+        scroll_bar = self.msg_browser.verticalScrollBar()
+        # 如果当前滚动位置接近底部（10像素内），则应该自动滚动
+        return scroll_bar.value() >= scroll_bar.maximum() - 10
     
     def insert_message_at_top(self, message):
         """在顶部插入消息"""
@@ -381,12 +387,12 @@ class ChatMessageArea(QWidget):
             if self._current_user is not None and sender == self._current_user:
                 # 自己发送的消息
                 header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>我 {time_str} ✓ 已发送</p>"
-                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #007AFF; color: white; padding: 4px 8px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 spacing_html = "<p style='height: 3px;'></p>"
             else:
                 # 他人发送的消息
                 header_html = f"<p style='text-align: left; color: #888; font-size: 12px; margin: 1px 0;'>{safe_sender} {time_str}</p>"
-                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 6px 10px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
+                bubble_html = f"<p style='text-align: left; margin: 1px 0;'><span style='background: #E9E9EB; color: #333; padding: 4px 8px; border-radius: 18px; text-decoration: none;'>{message_content}</span></p>"
                 spacing_html = "<p style='height: 3px;'></p>"
             
             # 插入HTML内容

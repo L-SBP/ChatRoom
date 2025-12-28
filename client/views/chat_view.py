@@ -83,25 +83,25 @@ class ChatView(QMainWindow):
         # 顶部状态栏
         self.status_bar = QLabel(f"已连接到 {self.server_host}:{self.server_port} | 用户: {self.username}")
         self.status_bar.setStyleSheet(
-            f"background-color: #e0e0e0; padding: 4px 8px; border-bottom: 1px solid #ccc; font-family: {client_config.ui.font.family}; color: #000000;")
-        self.status_bar.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 1))
-        self.status_bar.setFixedHeight(28)  # 减小状态栏高度
+            f"background-color: #e0e0e0; padding: 1px 4px; border-bottom: 1px solid #ccc; font-family: {client_config.ui.font.family}; color: #000000;")
+        self.status_bar.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 2))
+        self.status_bar.setFixedHeight(20)  # 进一步减小状态栏高度
         main_layout.addWidget(self.status_bar)
 
         # 分割器
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(12)  # 增加分割线宽度，便于拖拽
+        splitter.setHandleWidth(8)  # 减小分割线宽度
         splitter.setChildrenCollapsible(False)  # 防止组件被完全折叠
 
-        # 左侧聊天区域
+        # 聊天区域
         chat_widget = QWidget()
         chat_layout = QVBoxLayout()
-        chat_layout.setContentsMargins(15, 15, 10, 15)  # 增加边距，改善视觉效果
-        chat_layout.setSpacing(20)  # 增加间距，确保消息区域和输入区域之间有足够空间
+        chat_layout.setContentsMargins(3, 3, 1, 3)  # 进一步减小边距
+        chat_layout.setSpacing(6)  # 进一步减小间距
 
         # 消息显示区域
         self.message_area = ChatMessageArea(self.username)
-        self.message_area.setMinimumHeight(400)
+        self.message_area.setMinimumHeight(240)  # 进一步减小最小高度
         # 移除最大高度限制，让消息区域可以根据窗口大小自适应
         self.message_area.setStyleSheet("""
             ChatMessageArea {
@@ -115,33 +115,38 @@ class ChatView(QMainWindow):
         input_container.setStyleSheet("""
             background-color: #ffffff;
             border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 4px;
+            border-radius: 6px;
+            padding: 2px;
         """)
         
         # 输入区域垂直布局
         input_layout = QVBoxLayout(input_container)
-        input_layout.setSpacing(4)  # 设置元素间距
+        input_layout.setSpacing(3)  # 减小元素间距
         input_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 媒体工具栏按钮（在输入框上方）
+        # 主输入区域水平布局
+        main_input_layout = QHBoxLayout()
+        main_input_layout.setSpacing(3)  # 减小元素间距
+        main_input_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 媒体工具栏按钮
         toolbar_layout = QHBoxLayout()
-        toolbar_layout.setSpacing(4)
-        toolbar_layout.setContentsMargins(0, 0, 0, 4)  # 底部留出间距
+        toolbar_layout.setSpacing(2)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
 
         # 语音发送按钮
         self.voice_btn = QToolButton()
         self.voice_btn.setText("🎤")  # 语音图标
         self.voice_btn.setToolTip("发送语音")
-        self.voice_btn.setMinimumSize(36, 36)
-        self.voice_btn.setMaximumSize(36, 36)
+        self.voice_btn.setMinimumSize(24, 24)
+        self.voice_btn.setMaximumSize(24, 24)
         self.voice_btn.clicked.connect(self.send_voice)
         self.voice_btn.setStyleSheet("""
             QToolButton {
                 border: none;
                 background-color: transparent;
-                border-radius: 4px;
-                font-size: 22px;
+                border-radius: 2px;
+                font-size: 14px;
             }
             QToolButton:hover {
                 background-color: #f0f0f0;
@@ -153,15 +158,15 @@ class ChatView(QMainWindow):
         self.image_btn = QToolButton()
         self.image_btn.setText("🖼")  # 图片图标
         self.image_btn.setToolTip("发送图片")
-        self.image_btn.setMinimumSize(36, 36)
-        self.image_btn.setMaximumSize(36, 36)
+        self.image_btn.setMinimumSize(24, 24)
+        self.image_btn.setMaximumSize(24, 24)
         self.image_btn.clicked.connect(self.send_image)
         self.image_btn.setStyleSheet("""
             QToolButton {
                 border: none;
                 background-color: transparent;
-                border-radius: 4px;
-                font-size: 22px;
+                border-radius: 2px;
+                font-size: 14px;
             }
             QToolButton:hover {
                 background-color: #f0f0f0;
@@ -173,15 +178,15 @@ class ChatView(QMainWindow):
         self.video_btn = QToolButton()
         self.video_btn.setText("🎬")  # 视频图标
         self.video_btn.setToolTip("发送视频")
-        self.video_btn.setMinimumSize(36, 36)
-        self.video_btn.setMaximumSize(36, 36)
+        self.video_btn.setMinimumSize(24, 24)
+        self.video_btn.setMaximumSize(24, 24)
         self.video_btn.clicked.connect(self.send_video)
         self.video_btn.setStyleSheet("""
             QToolButton {
                 border: none;
                 background-color: transparent;
-                border-radius: 4px;
-                font-size: 22px;
+                border-radius: 2px;
+                font-size: 14px;
             }
             QToolButton:hover {
                 background-color: #f0f0f0;
@@ -193,15 +198,15 @@ class ChatView(QMainWindow):
         self.file_btn = QToolButton()
         self.file_btn.setText("📁")  # 文件图标
         self.file_btn.setToolTip("发送文件")
-        self.file_btn.setMinimumSize(36, 36)
-        self.file_btn.setMaximumSize(36, 36)
+        self.file_btn.setMinimumSize(24, 24)
+        self.file_btn.setMaximumSize(24, 24)
         self.file_btn.clicked.connect(self.send_file)
         self.file_btn.setStyleSheet("""
             QToolButton {
                 border: none;
                 background-color: transparent;
-                border-radius: 4px;
-                font-size: 22px;
+                border-radius: 2px;
+                font-size: 14px;
             }
             QToolButton:hover {
                 background-color: #f0f0f0;
@@ -209,28 +214,9 @@ class ChatView(QMainWindow):
         """)
         toolbar_layout.addWidget(self.file_btn)
 
-        # 将媒体按钮和设置按钮分开
-        toolbar_layout.addStretch(0)
-        
-        # 设置按钮
-        self.settings_btn = QToolButton()
-        self.settings_btn.setText("⚙")  # 设置图标
-        self.settings_btn.setToolTip("设置")
-        self.settings_btn.setMinimumSize(36, 36)
-        self.settings_btn.setMaximumSize(36, 36)
-        self.settings_btn.setStyleSheet("""
-            QToolButton {
-                border: none;
-                background-color: transparent;
-                border-radius: 4px;
-                font-size: 22px;
-            }
-            QToolButton:hover {
-                background-color: #f0f0f0;
-            }
-        """)
-        toolbar_layout.addWidget(self.settings_btn)
-        
+        # 将媒体按钮添加到主输入布局
+        main_input_layout.addLayout(toolbar_layout)
+
         # 消息输入框
         self.message_input = QTextEdit()
         self.message_input.setPlaceholderText("请输入消息...")
@@ -239,48 +225,37 @@ class ChatView(QMainWindow):
         self.message_input.setTabChangesFocus(True)
         self.message_input.textChanged.connect(self.update_input_height)
         self.message_input.installEventFilter(self)
-        self.message_input.setMinimumHeight(48)  # 设置为大约2行高度
-        self.message_input.setMaximumHeight(60)  # 设置为大约2行高度
+        self.message_input.setMinimumHeight(32)  # 减小高度
+        self.message_input.setMaximumHeight(40)  # 减小最大高度
         # 设置样式表，避免使用f-string的花括号转义问题
         self.message_input.setStyleSheet("""
             QTextEdit {
-                padding: 4px 8px;
+                padding: 3px 6px;
                 border: 1px solid #ddd;
-                border-radius: 20px;
+                border-radius: 16px;
                 background-color: #ffffff;
                 color: #000000;
             }
         """)
-        input_layout.addWidget(self.message_input)
+        main_input_layout.addWidget(self.message_input, 1)  # 让输入框占据剩余空间
 
-        # 发送按钮布局
-        send_layout = QHBoxLayout()
-        send_layout.setSpacing(4)
-        send_layout.setContentsMargins(0, 0, 0, 0)  # 顶部不留间距
-        
-        # 添加工具栏到发送按钮布局中
-        send_layout.addLayout(toolbar_layout)
-        
-        # 添加拉伸空间
-        send_layout.addStretch(1)
-        
         # 发送按钮
         self.send_btn = QPushButton("发送(S)")
-        self.send_btn.setMinimumWidth(100)
-        self.send_btn.setMaximumWidth(140)
-        self.send_btn.setMinimumHeight(26)  # 增加按钮高度
+        self.send_btn.setMinimumWidth(70)
+        self.send_btn.setMaximumWidth(80)
+        self.send_btn.setMinimumHeight(22)  # 调整按钮高度
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                padding: 4px 10px;
-                border-radius: 20px;
+                padding: 2px 6px;
+                border-radius: 12px;
                 font-weight: bold;
-                font-size: 14px;
-                min-width: 100px;
-                max-width: 140px;
+                font-size: 11px;
+                min-width: 70px;
+                max-width: 80px;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -289,9 +264,29 @@ class ChatView(QMainWindow):
                 background-color: #3d8b40;
             }
         """)
-        send_layout.addWidget(self.send_btn)
-        
-        input_layout.addLayout(send_layout)
+        main_input_layout.addWidget(self.send_btn, alignment=Qt.AlignVCenter)  # 垂直居中
+
+        # 设置按钮
+        self.settings_btn = QToolButton()
+        self.settings_btn.setText("⚙")  # 设置图标
+        self.settings_btn.setToolTip("设置")
+        self.settings_btn.setMinimumSize(24, 24)
+        self.settings_btn.setMaximumSize(24, 24)
+        self.settings_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 2px;
+                font-size: 14px;
+            }
+            QToolButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        main_input_layout.addWidget(self.settings_btn, alignment=Qt.AlignVCenter)  # 垂直居中
+
+        # 将主输入布局添加到输入区域垂直布局
+        input_layout.addLayout(main_input_layout)
 
         chat_layout.addWidget(input_container)
 
@@ -299,39 +294,41 @@ class ChatView(QMainWindow):
 
         # 右侧用户列表
         user_widget = QWidget()
+        user_widget.setStyleSheet("background-color: #f0f2f5;")  # 设置与聊天区域一致的背景色
         user_layout = QVBoxLayout()
-        user_layout.setContentsMargins(10, 15, 15, 15)  # 增加边距，改善视觉效果
-        user_layout.setSpacing(12)  # 增加间距，避免拥挤
+        user_layout.setContentsMargins(3, 3, 1, 3)  # 调整边距与聊天区域一致
+        user_layout.setSpacing(3)  # 进一步减小间距，使标题与用户列表更紧凑
 
         # 用户列表标题
         user_title = QLabel("在线用户")
-        user_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.subtitleSize, QFont.Bold))
-        user_title.setStyleSheet("color: #000000; padding: 8px 0; font-weight: bold;")
+        user_title.setFont(QFont(client_config.ui.font.family, client_config.ui.font.subtitleSize - 1, QFont.Bold))
+        user_title.setStyleSheet("color: #000000; padding: 2px 6px; font-weight: bold;")
+        user_title.setFixedHeight(24)  # 设置固定高度，确保与聊天区域对齐
         user_layout.addWidget(user_title)
 
         # 用户列表
         self.user_list = QListWidget()
-        self.user_list.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize))
-        self.user_list.setMinimumHeight(300)  # 增加最小高度，显示更多用户
-        self.user_list.setMaximumHeight(400)  # 设置最大高度，防止占用过多空间
+        self.user_list.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 2))
+        self.user_list.setMinimumHeight(200)  # 进一步减小最小高度
+        self.user_list.setMaximumHeight(240)  # 进一步减小最大高度
         self.user_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #aaa;
-                border-radius: 8px;
-                padding: 8px;
+                border-radius: 4px;
+                padding: 6px;
                 background-color: #ffffff;
                 color: #000000;
             }
             QListWidget::item {
-                padding: 8px 10px;
+                padding: 3px 5px;
                 border-bottom: 1px solid #eee;
                 color: #000000;
-                border-radius: 4px;
+                border-radius: 2px;
             }
             QListWidget::item:selected {
                 background-color: #2196F3;
                 color: white;
-                border-radius: 4px;
+                border-radius: 2px;
             }
             QListWidget::item:hover:!selected {
                 background-color: #f0f0f0;
@@ -344,21 +341,21 @@ class ChatView(QMainWindow):
 
         # 私聊按钮
         private_chat_btn = QPushButton("私聊")
-        private_chat_btn.setMinimumWidth(120)
-        private_chat_btn.setMaximumWidth(160)
-        private_chat_btn.setMinimumHeight(36)  # 增加按钮高度
+        private_chat_btn.setMinimumWidth(70)
+        private_chat_btn.setMaximumWidth(100)
+        private_chat_btn.setMinimumHeight(24)  # 减小按钮高度
         private_chat_btn.clicked.connect(self.start_private_chat)
         private_chat_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
                 color: white;
                 border: none;
-                padding: 10px 16px;
-                border-radius: 6px;
+                padding: 4px 8px;
+                border-radius: 3px;
                 font-weight: bold;
-                font-size: 14px;
-                min-width: 120px;
-                max-width: 160px;
+                font-size: 12px;
+                min-width: 70px;
+                max-width: 100px;
             }
             QPushButton:hover {
                 background-color: #F57C00;
@@ -371,21 +368,21 @@ class ChatView(QMainWindow):
 
         # 刷新按钮
         refresh_btn = QPushButton("刷新用户")
-        refresh_btn.setMinimumWidth(120)
-        refresh_btn.setMaximumWidth(160)
-        refresh_btn.setMinimumHeight(36)  # 增加按钮高度
+        refresh_btn.setMinimumWidth(70)
+        refresh_btn.setMaximumWidth(100)
+        refresh_btn.setMinimumHeight(24)  # 减小按钮高度
         refresh_btn.clicked.connect(self.refresh_users)
         refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #9E9E9E;
                 color: white;
                 border: none;
-                padding: 10px 16px;
-                border-radius: 6px;
+                padding: 4px 8px;
+                border-radius: 3px;
                 font-weight: bold;
-                font-size: 14px;
-                min-width: 120px;
-                max-width: 160px;
+                font-size: 12px;
+                min-width: 70px;
+                max-width: 100px;
             }
             QPushButton:hover {
                 background-color: #757575;
@@ -401,19 +398,19 @@ class ChatView(QMainWindow):
         # 添加到分割器
         splitter.addWidget(chat_widget)
         splitter.addWidget(user_widget)
-        splitter.setSizes([650, 250])  # 减小聊天区域宽度，节省水平空间
+        splitter.setSizes([450, 110])  # 进一步减小用户列表宽度
         splitter.setStretchFactor(0, 1)  # 让聊天区域可以拉伸
         splitter.setStretchFactor(1, 0)  # 用户列表区域不拉伸
-        splitter.setMinimumWidth(750)  # 调整分割器最小宽度
+        splitter.setMinimumWidth(500)  # 调整分割器最小宽度，适应更小的用户列表
 
         main_layout.addWidget(splitter)
 
         # 底部状态
         self.bottom_status = QLabel("就绪")
         self.bottom_status.setStyleSheet(
-            "background-color: #e0e0e0; padding: 2px 5px; border-top: 1px solid #ccc; font-family: " + client_config.ui.font.family + "; color: #000000;")
-        self.bottom_status.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 2))
-        self.bottom_status.setFixedHeight(24)  # 减小底部状态栏高度
+            "background-color: #e0e0e0; padding: 1px 4px; border-top: 1px solid #ccc; font-family: " + client_config.ui.font.family + "; color: #000000;")
+        self.bottom_status.setFont(QFont(client_config.ui.font.family, client_config.ui.font.normalSize - 3))
+        self.bottom_status.setFixedHeight(20)  # 减小底部状态栏高度
         main_layout.addWidget(self.bottom_status)
 
         central_widget.setLayout(main_layout)
@@ -423,7 +420,7 @@ class ChatView(QMainWindow):
         if self.controller.use_existing_connection(self.username):
             self.bottom_status.setText(f"已连接 - 用户: {self.username}")
             self.bottom_status.setStyleSheet(
-                "background-color: #C8E6C9; padding: 5px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
+                "background-color: #C8E6C9; padding: 1px 4px; border-top: 1px solid #ccc; color: #2E7D32; font-family: " + client_config.ui.font.family + ";")
             # 添加连接成功的系统消息
             self.add_system_message(f"✓ 已连接到聊天室，欢迎 {self.username}！")
             
@@ -433,7 +430,7 @@ class ChatView(QMainWindow):
         else:
             self.bottom_status.setText("连接已断开")
             self.bottom_status.setStyleSheet(
-                "background-color: #FFCDD2; padding: 5px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
+                "background-color: #FFCDD2; padding: 1px 4px; border-top: 1px solid #ccc; color: #C62828; font-family: " + client_config.ui.font.family + ";")
             self.add_system_message("✗ 连接失败，请检查网络连接")
 
     def on_message_received(self, message_obj):
@@ -487,15 +484,18 @@ class ChatView(QMainWindow):
                 else:
                     # 普通消息
                     self.message_area.add_message(message_obj)
-                    # 确保滚动到底部
-                    QTimer.singleShot(100, self.message_area.scroll_to_bottom)
+                    # 只有当用户已经在底部时才自动滚动到底部
+                    if self.message_area.should_auto_scroll():
+                        QTimer.singleShot(100, self.message_area.scroll_to_bottom)
             elif isinstance(message_obj, dict):
                 # 如果是字典格式
                 if message_obj.get('content_type') == 'system':
                     self.add_system_message(message_obj.get('content', ''))
                 else:
                     self.message_area.add_message(message_obj)
-                    QTimer.singleShot(100, self.message_area.scroll_to_bottom)
+                    # 只有当用户已经在底部时才自动滚动到底部
+                    if self.message_area.should_auto_scroll():
+                        QTimer.singleShot(100, self.message_area.scroll_to_bottom)
             else:
                 log.error(f"未知的消息格式: {type(message_obj)}")
                 self.add_system_message(f"消息格式错误: {type(message_obj)}")
