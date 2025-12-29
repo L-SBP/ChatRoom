@@ -278,7 +278,8 @@ class ClientHandler:
 
     async def _process_private_message(self, request: Dict[str, Any]) -> None:
         """处理私聊消息"""
-        message = request.get('content', '')
+        # 确保request中包含所有必要字段
+        message = request.get('content', '') or request.get('message', '')
         receiver = request.get('receiver', '')
         content_type = request.get('content_type', 'text')
         timestamp = request.get('timestamp', time.time())
@@ -308,6 +309,10 @@ class ClientHandler:
             })
             return
 
+        # 添加发送者信息到请求中，确保请求分发器能正确处理
+        request['username'] = self.username
+        request['sender'] = self.username  # 明确添加sender字段
+        
         # 通过请求分发器处理私聊消息
         try:
             from server.handlers.request_dispatcher import RequestDispatcher

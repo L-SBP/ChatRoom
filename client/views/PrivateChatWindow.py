@@ -193,6 +193,9 @@ class PrivateChatWindow(QMainWindow):
         self.show()
         self.raise_()
         self.activateWindow()
+        # 确保窗口不被最小化
+        if self.isMinimized():
+            self.showNormal()
     
     def update_conversation(self, conversation: ConversationVO):
         """更新会话信息"""

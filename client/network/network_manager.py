@@ -98,68 +98,17 @@ class NetworkThread(QThread):
         log.debug(f"网络层接收到原始数据: {data}")
         msg_type = data.get('type')
         
-        if msg_type in ['text', 'image', 'video', 'file', 'audio']:
+        # 私聊消息处理应该放在最前面，确保不会被其他类型干扰
+        if msg_type == 'private':
+            # 获取消息发送者
             username = data.get('username', '')
-            content = data.get('content', '')
-            content_type = msg_type
-            timestamp = data.get('timestamp', time.time())
             
-            # 确保timestamp是数值类型
-            if isinstance(timestamp, str):
-                try:
-                    timestamp = float(timestamp)
-                except ValueError:
-                    timestamp = time.time()
+            # 如果是自己发送的消息，忽略它（因为已有本地回显）
+            if username == self.username:
+                log.debug(f"网络层忽略自己发送的私聊消息: {username}")
+                return
             
-            # 如果是文件类型消息，需要处理文件数据
-            file_vo = None
-            if content_type in ['image', 'video', 'audio', 'file']:
-                filename = data.get('filename', '')
-                file_url = data.get('file_url', '')
-                file_size = data.get('size', 0)
-                if isinstance(file_size, str):
-                    try:
-                        file_size = int(file_size)
-                    except ValueError:
-                        file_size = 0
-                
-                # 创建文件VO对象
-                file_vo = FileVO(
-                    file_id=data.get('file_id', ''),
-                    file_name=filename,
-                    file_url=file_url,
-                    file_type=content_type,
-                    file_size=file_size,
-                    created_at=datetime.fromtimestamp(timestamp) if timestamp else None
-                )
-                
-                # 如果是服务器转发的消息且有file_data，则保存文件
-                file_data = data.get('data', '')
-                if file_data:
-                    # 保存文件
-                    file_path = self.save_file(filename, file_data)
-                    if file_path:
-                        # 更新file_vo的file_url为本地保存路径
-                        file_vo.file_url = file_path
-                        # 发送文件接收信号
-                        self.file_received.emit(filename, file_path)
-            
-            # 创建消息VO对象用于界面展示
-            message_vo = MessageVO(
-                message_id=data.get('message_id', ''),
-                user_id=data.get('user_id', ''),
-                username=username,
-                content_type=content_type,
-                content=content,
-                file_vo=file_vo,
-                created_at=datetime.fromtimestamp(timestamp) if timestamp else None
-            )
-            
-            self.message_received.emit(message_vo)
-            
-        elif msg_type == 'private':
-            # 处理私聊消息
-            username = data.get('username', '')
+            # 处理接收到的私聊消息
             receiver = data.get('receiver', '')
             content = data.get('content', '')
             content_type = data.get('content_type', 'text')
@@ -219,8 +168,70 @@ class NetworkThread(QThread):
                 
                 private_message_vo.file_vo = file_vo
             
+            log.info(f"网络层处理接收到的私聊消息: {username} -> {receiver}, 内容: {content[:50]}...")
+            # 发送私聊消息到视图层
             self.message_received.emit(private_message_vo)
-
+            return  # 私聊消息处理完成
+            
+        elif msg_type in ['text', 'image', 'video', 'file', 'audio']:
+            username = data.get('username', '')
+            content = data.get('content', '')
+            content_type = msg_type
+            timestamp = data.get('timestamp', time.time())
+            
+            # 确保timestamp是数值类型
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = float(timestamp)
+                except ValueError:
+                    timestamp = time.time()
+            
+            # 如果是文件类型消息，需要处理文件数据
+            file_vo = None
+            if content_type in ['image', 'video', 'audio', 'file']:
+                filename = data.get('filename', '')
+                file_url = data.get('file_url', '')
+                file_size = data.get('size', 0)
+                if isinstance(file_size, str):
+                    try:
+                        file_size = int(file_size)
+                    except ValueError:
+                        file_size = 0
+                
+                # 创建文件VO对象
+                file_vo = FileVO(
+                    file_id=data.get('file_id', ''),
+                    file_name=filename,
+                    file_url=file_url,
+                    file_type=content_type,
+                    file_size=file_size,
+                    created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+                )
+                
+                # 如果是服务器转发的消息且有file_data，则保存文件
+                file_data = data.get('data', '')
+                if file_data:
+                    # 保存文件
+                    file_path = self.save_file(filename, file_data)
+                    if file_path:
+                        # 更新file_vo的file_url为本地保存路径
+                        file_vo.file_url = file_path
+                        # 发送文件接收信号
+                        self.file_received.emit(filename, file_path)
+            
+            # 创建消息VO对象用于界面展示
+            message_vo = MessageVO(
+                message_id=data.get('message_id', ''),
+                user_id=data.get('user_id', ''),
+                username=username,
+                content_type=content_type,
+                content=content,
+                file_vo=file_vo,
+                created_at=datetime.fromtimestamp(timestamp) if timestamp else None
+            )
+            
+            self.message_received.emit(message_vo)
+            
         elif msg_type == 'user_list':
             users = data.get('users', [])
             self.user_list_updated.emit(users)
@@ -234,15 +245,11 @@ class NetworkThread(QThread):
             if isinstance(timestamp, str):
                 try:
                     # 如果是时间字符串格式如'15:35:49'，我们需要转换为时间戳
-                    if ':' in timestamp:
-                        # 将时间字符串转换为当日的时间戳
-                        import datetime as dt_module
-                        current_date = dt_module.date.today()
-                        time_obj = dt_module.datetime.strptime(timestamp, '%H:%M:%S').time()
-                        dt = dt_module.datetime.combine(current_date, time_obj)
-                        timestamp = dt.timestamp()
-                    else:
-                        timestamp = float(timestamp)
+                    import datetime as dt_module
+                    current_date = dt_module.date.today()
+                    time_obj = dt_module.datetime.strptime(timestamp, '%H:%M:%S').time()
+                    dt = dt_module.datetime.combine(current_date, time_obj)
+                    timestamp = dt.timestamp()
                 except ValueError:
                     timestamp = time.time()
             

@@ -442,12 +442,45 @@ class ChatView(QMainWindow):
             if isinstance(message_obj, list):
                 log.debug(f"视图接收到历史消息列表，共 {len(message_obj)} 条消息")
                 
+                # 检查是否是私聊历史消息（列表中的第一条消息如果有receiver字段）
+                is_private_history = False
+                if message_obj and hasattr(message_obj[0], 'receiver_name'):
+                    is_private_history = True
+                
+                # 如果是私聊历史消息，需要转发到对应的私聊窗口
+                if is_private_history and message_obj:
+                    # 获取第一条消息的发送者来确定是哪个私聊会话
+                    first_msg = message_obj[0]
+                    if hasattr(first_msg, 'receiver_name'):
+                        # 判断消息方向：是发送给别人的还是接收到的
+                        sender = first_msg.username
+                        receiver = first_msg.receiver_name
+                        
+                        # 确定私聊窗口的键名
+                        if sender == self.username:
+                            # 自己发送的消息，私聊窗口键名应该是 receiver_self
+                            target_user = receiver
+                            private_window_key = f"{target_user}_{self.username}"
+                        else:
+                            # 接收到的消息，私聊窗口键名应该是 sender_self
+                            target_user = sender
+                            private_window_key = f"{target_user}_{self.username}"
+                        
+                        # 查找对应的私聊窗口
+                        if private_window_key in self.controller.private_chat_windows:
+                            private_chat_window = self.controller.private_chat_windows[private_window_key]
+                            private_chat_window.load_history_messages(message_obj)
+                        else:
+                            # 没有对应的私聊窗口，创建并显示
+                            self._create_and_show_private_chat_window_for_history(target_user, message_obj)
+                    return  # 私聊历史消息处理完成
+                
+                # 普通历史消息处理
                 for msg in message_obj:
                     if isinstance(msg, dict):
                         self.message_area.insert_message_at_top(msg)
                     
-                    # 更新最旧的消息ID - 记录最旧的消息ID（列表中的最后一个消息，即最旧的）
-                    # 因为我们反转了列表，最旧的消息现在是最后一个被处理的
+                    # 更新最旧的消息ID
                     if hasattr(msg, 'message_id') and msg.message_id:
                         self.message_area._oldest_message_id = msg.message_id
                 
@@ -462,35 +495,33 @@ class ChatView(QMainWindow):
                 # 如果是VO对象
                 content_type = message_obj.content_type
                 
-                if content_type == "private":
+                if hasattr(message_obj, 'receiver_name') or hasattr(message_obj, 'receiver'):
                     # 私聊消息，需要转发到相应的私聊窗口
-                    if hasattr(message_obj, 'receiver_name'):
-                        # 检查是否是发给自己的消息
-                        sender = message_obj.username
-                        receiver = message_obj.receiver_name
-                        if receiver == self.username:
-                            # 接收到的私聊消息，需要显示在对应的私聊窗口中
-                            # 检查是否存在对应的私聊窗口
-                            private_window_key = f"{sender}_{self.username}"  # 修正窗口键名，确保一致
-                            if private_window_key in self.controller.private_chat_windows:
-                                # 发送到对应的私聊窗口
-                                private_chat_window = self.controller.private_chat_windows[private_window_key]
-                                private_chat_window.add_private_message(message_obj)
-                            else:
-                                # 没有对应的私聊窗口，自动创建并显示
-                                self._create_and_show_private_chat_window(sender, message_obj)
-                        # 注意：对于私聊消息，如果接收者不是自己，说明消息被错误发送或接收，这里不处理
-                        # 因为服务器只将私聊消息发送给接收者
+                    sender = message_obj.username
+                    receiver = getattr(message_obj, 'receiver_name', '') or getattr(message_obj, 'receiver', '')
+                    
+                    if not receiver:
+                        log.warning(f"私聊消息缺少接收者信息: {message_obj}")
+                        return  # 直接返回，不显示在公共区域
+                    
+                    # 检查消息方向：如果是自己发送的消息，不处理（因为已有本地回显）
+                    if sender == self.username:
+                        log.debug(f"忽略自己发送的私聊消息: {sender} -> {receiver}")
+                        return
+                    
+                    # 接收到的私聊消息
+                    target_user = sender
+                    private_window_key = f"{target_user}_{self.username}"
+                    
+                    if private_window_key in self.controller.private_chat_windows:
+                        # 发送到对应的私聊窗口
+                        private_chat_window = self.controller.private_chat_windows[private_window_key]
+                        private_chat_window.add_private_message(message_obj)
+                        # 确保私聊窗口显示
+                        private_chat_window.bring_to_front()
                     else:
-                        # 如果私聊消息对象没有receiver_name属性，仍然可能是私聊消息，显示在公共区域
-                        # 但这种情况应该很少见
-                        self.message_area.add_message(message_obj)
-                        # 只有当用户已经在底部时才自动滚动到底部
-                        if self.message_area.should_auto_scroll():
-                            QTimer.singleShot(100, self.message_area.scroll_to_bottom)
-                        # 只有当用户已经在底部时才自动滚动到底部
-                        if self.message_area.should_auto_scroll():
-                            QTimer.singleShot(100, self.message_area.scroll_to_bottom)
+                        # 没有对应的私聊窗口，自动创建并显示
+                        self._create_and_show_private_chat_window(target_user, message_obj)
                     return  # 私聊消息处理完成，直接返回，不执行后续的公共消息处理
                 elif content_type == "system":
                     # 处理系统消息
@@ -504,25 +535,35 @@ class ChatView(QMainWindow):
                         QTimer.singleShot(100, self.message_area.scroll_to_bottom)
             elif isinstance(message_obj, dict):
                 # 如果是字典格式
-                if message_obj.get('content_type') == 'private':
+                if message_obj.get('receiver') or message_obj.get('receiver_name'):
                     # 私聊消息
                     sender = message_obj.get('username', '')
-                    receiver = message_obj.get('receiver', '')
-                    if receiver == self.username:
-                        # 接收到的私聊消息，需要显示在对应的私聊窗口中
-                        # 检查是否存在对应的私聊窗口
-                        private_window_key = f"{sender}_{self.username}"  # 修正窗口键名，确保一致
-                        if private_window_key in self.controller.private_chat_windows:
-                            # 发送到对应的私聊窗口
-                            from client.models.vo import PrivateMessageVO
-                            private_message_vo = PrivateMessageVO.from_dict(message_obj)
-                            private_chat_window = self.controller.private_chat_windows[private_window_key]
-                            private_chat_window.add_private_message(private_message_vo)
-                        else:
-                            # 没有对应的私聊窗口，自动创建并显示
-                            self._create_and_show_private_chat_window(sender, message_obj)
-                    # 注意：对于私聊消息，如果接收者不是自己，说明消息被错误发送或接收，这里不处理
-                    # 因为服务器只将私聊消息发送给接收者
+                    receiver = message_obj.get('receiver', '') or message_obj.get('receiver_name', '')
+                    
+                    if not receiver:
+                        log.warning(f"私聊消息缺少接收者信息: {message_obj}")
+                        return
+                    
+                    # 检查消息方向：如果是自己发送的消息，不处理（因为已有本地回显）
+                    if sender == self.username:
+                        log.debug(f"忽略自己发送的私聊消息: {sender} -> {receiver}")
+                        return
+                    
+                    # 接收到的私聊消息
+                    target_user = sender
+                    private_window_key = f"{target_user}_{self.username}"
+                    
+                    if private_window_key in self.controller.private_chat_windows:
+                        # 发送到对应的私聊窗口
+                        from client.models.vo import PrivateMessageVO
+                        private_message_vo = PrivateMessageVO.from_dict(message_obj)
+                        private_chat_window = self.controller.private_chat_windows[private_window_key]
+                        private_chat_window.add_private_message(private_message_vo)
+                        # 确保私聊窗口显示
+                        private_chat_window.bring_to_front()
+                    else:
+                        # 没有对应的私聊窗口，自动创建并显示
+                        self._create_and_show_private_chat_window(target_user, message_obj)
                     return  # 私聊消息处理完成，直接返回，不执行后续的公共消息处理
                 elif message_obj.get('content_type') == 'system':
                     self.add_system_message(message_obj.get('content', ''))
@@ -546,46 +587,113 @@ class ChatView(QMainWindow):
             if hasattr(self.message_area, '_is_loading'):
                 self.message_area.load_history_btn.setEnabled(True)
 
-    def _create_and_show_private_chat_window(self, sender: str, message_obj):
-        """创建并显示私聊窗口，用于显示接收到的私聊消息"""
+    def _create_and_show_private_chat_window(self, target_user: str, message_obj=None):
+        """创建并显示私聊窗口"""
         from client.views.PrivateChatWindow import PrivateChatWindow
         from client.models.vo import ConversationVO
         import uuid
+        
+        # 检查是否已经存在该私聊窗口
+        private_window_key = f"{target_user}_{self.username}"
+        if private_window_key in self.controller.private_chat_windows:
+            # 窗口已存在，直接显示并添加消息
+            private_chat_window = self.controller.private_chat_windows[private_window_key]
+            if message_obj:
+                # 如果是VO对象，直接添加
+                if hasattr(message_obj, 'content_type'):
+                    private_chat_window.add_private_message(message_obj)
+                elif isinstance(message_obj, dict):
+                    # 字典对象，转换为VO
+                    from client.models.vo import PrivateMessageVO
+                    private_message_vo = PrivateMessageVO.from_dict(message_obj)
+                    private_chat_window.add_private_message(private_message_vo)
+            private_chat_window.bring_to_front()
+            return private_chat_window
         
         # 模拟创建会话对象（实际应从服务器获取）
         conversation = ConversationVO(
             conversation_id=str(uuid.uuid4()),
             user1_name=self.username,
-            user2_name=sender,
+            user2_name=target_user,
             user1_id="",  # 实际应从服务器获取
             user2_id=""   # 实际应从服务器获取
         )
-        
-        # 创建私聊窗口键名，确保与发送消息时一致
-        private_window_key = f"{sender}_{self.username}"
         
         # 创建新的私聊窗口
         private_chat_window = PrivateChatWindow(conversation, self.username, self.controller)
         private_chat_window.send_message.connect(self.on_send_private_message)
         private_chat_window.load_history.connect(self.on_load_private_history)
-        self.controller.private_chat_windows[private_window_key] = private_chat_window
         private_chat_window.window_closed.connect(self.on_private_window_closed)
         
-        # 如果是VO对象，添加消息到窗口
-        if hasattr(message_obj, 'content_type'):
-            # VO对象
-            private_chat_window.add_private_message(message_obj)
-        elif isinstance(message_obj, dict):
-            # 字典对象，转换为VO
-            from client.models.vo import PrivateMessageVO
-            private_message_vo = PrivateMessageVO.from_dict(message_obj)
-            private_chat_window.add_private_message(private_message_vo)
+        # 将窗口添加到控制器
+        self.controller.private_chat_windows[private_window_key] = private_chat_window
+        
+        # 如果有消息，添加到窗口
+        if message_obj:
+            if hasattr(message_obj, 'content_type'):
+                # VO对象
+                private_chat_window.add_private_message(message_obj)
+            elif isinstance(message_obj, dict):
+                # 字典对象，转换为VO
+                from client.models.vo import PrivateMessageVO
+                private_message_vo = PrivateMessageVO.from_dict(message_obj)
+                private_chat_window.add_private_message(private_message_vo)
         
         # 显示私聊窗口
         private_chat_window.show()
+        private_chat_window.bring_to_front()
         
         # 显示系统提示
-        self.add_system_message(f"已为 {sender} 创建私聊窗口并显示消息")
+        log.info(f"为 {target_user} 创建并显示私聊窗口")
+        
+        return private_chat_window
+
+    def _create_and_show_private_chat_window_for_history(self, target_user: str, history_messages: list):
+        """为历史消息创建并显示私聊窗口"""
+        from client.views.PrivateChatWindow import PrivateChatWindow
+        from client.models.vo import ConversationVO
+        import uuid
+        
+        # 检查是否已经存在该私聊窗口
+        private_window_key = f"{target_user}_{self.username}"
+        if private_window_key in self.controller.private_chat_windows:
+            # 窗口已存在，直接加载历史消息
+            private_chat_window = self.controller.private_chat_windows[private_window_key]
+            private_chat_window.load_history_messages(history_messages)
+            private_chat_window.bring_to_front()
+            return
+        
+        # 从历史消息中获取会话ID（如果有的话）
+        conversation_id = ""
+        if history_messages and hasattr(history_messages[0], 'conversation_id'):
+            conversation_id = history_messages[0].conversation_id
+        
+        # 模拟创建会话对象（实际应从服务器获取）
+        conversation = ConversationVO(
+            conversation_id=conversation_id if conversation_id else str(uuid.uuid4()),
+            user1_name=self.username,
+            user2_name=target_user,
+            user1_id="",  # 实际应从服务器获取
+            user2_id=""   # 实际应从服务器获取
+        )
+        
+        # 创建新的私聊窗口
+        private_chat_window = PrivateChatWindow(conversation, self.username, self.controller)
+        private_chat_window.send_message.connect(self.on_send_private_message)
+        private_chat_window.load_history.connect(self.on_load_private_history)
+        private_chat_window.window_closed.connect(self.on_private_window_closed)
+        
+        # 将窗口添加到控制器
+        self.controller.private_chat_windows[private_window_key] = private_chat_window
+        
+        # 加载历史消息
+        private_chat_window.load_history_messages(history_messages)
+        
+        # 显示私聊窗口
+        private_chat_window.show()
+        private_chat_window.bring_to_front()
+        
+        log.info(f"为 {target_user} 创建私聊窗口并加载历史消息")
 
     def on_user_list_updated(self, users: list):
         """处理用户列表更新"""

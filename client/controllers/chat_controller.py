@@ -4,7 +4,7 @@
 聊天控制器
 处理聊天相关的业务逻辑
 """
-
+import time
 from typing import List, Optional, Callable
 from PyQt5.QtCore import QObject, pyqtSignal
 from datetime import datetime
@@ -120,10 +120,25 @@ class ChatController(QObject):
                 self.system_message.emit("请选择接收者")
                 return False
             
-            # 创建私聊消息VO对象
+            # 构造私聊消息数据
+            data = {
+                'type': 'private',
+                'username': self.current_user,
+                'receiver': receiver,
+                'content': content,
+                'content_type': 'text',
+                'timestamp': datetime.now().timestamp()
+            }
+            
+            # 如果有会话ID，添加到数据中
+            if conversation_id:
+                data['conversation_id'] = conversation_id
+            
+            # 创建私聊消息VO对象用于本地回显
+            from client.models.vo import PrivateMessageVO
             private_message_vo = PrivateMessageVO(
-                message_id="",  # 会在服务端生成
-                user_id="",     # 会在服务端设置
+                message_id="",
+                user_id="",
                 username=self.current_user,
                 receiver_name=receiver,
                 content_type="text",
@@ -132,21 +147,12 @@ class ChatController(QObject):
                 created_at=datetime.now()
             )
             
-            # 构造私聊消息数据
-            data = {
-                'type': 'private',  # 私聊消息类型
-                'message_type': 'private',  # 明确指定为私聊
-                'username': self.current_user,
-                'receiver': receiver,
-                'content_type': 'text',
-                'content': content,
-                'timestamp': datetime.now().timestamp()
-            }
-            
-            # 发送私聊消息
+            # 先发送消息到服务器
             self.network_manager.send_data(data)
+            log.info(f"私聊消息已发送: {self.current_user} -> {receiver}, 内容: {content[:50]}...")
+            
+            # 然后立即在本地显示（回显）
             self.message_sent.emit(private_message_vo)
-            log.debug(f"私聊消息发送成功: {self.current_user} -> {receiver}, 内容: {content}")
             
             return True
         except Exception as e:

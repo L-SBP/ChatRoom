@@ -135,7 +135,11 @@ class MessageManager:
                 try:
                     # 发送私聊消息给接收者
                     receiver_client.socket.send(json.dumps(private_message).encode('utf-8'))
-                    log.info(f"私聊消息已发送: {sender_username} -> {receiver_username}")
+                    log.info(f"私聊消息已发送给接收者: {sender_username} -> {receiver_username}")
+                    
+                    # 重要：不再回传给发送者，因为发送者已经有本地回显了
+                    # 发送者可以通过发送成功后立即显示消息，不需要服务器回传
+                    
                     return True
                 except Exception as e:
                     log.error(f"发送私聊消息给 {receiver_username} 失败: {e}")

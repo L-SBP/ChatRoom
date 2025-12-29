@@ -17,88 +17,109 @@ class MessageHandler:
     def __init__(self, connection_manager: ConnectionManager):
         self.connection_manager = connection_manager
 
-    async def handle_message(self, request_data: Dict[str, Any], client_socket=None) -> Dict[str, Any]:
-        """处理消息请求（支持多种消息类型）"""
+    async def handle_private_message(self, request_data: Dict[str, Any], client_socket=None, client_address=None) -> Dict[str, Any]:
+        """专门处理私聊消息请求"""
         username = request_data.get('username')
         content_type = request_data.get('content_type', 'text')
-        content = request_data.get('content', '')
+        content = request_data.get('content', '') or request_data.get('message', '')
+        receiver = request_data.get('receiver')
         timestamp = request_data.get('timestamp', time.time())
 
-        # 检查是否为私聊消息
-        message_type = request_data.get('message_type', 'public')
-        if message_type == 'private':
-            # 处理私聊消息
-            receiver = request_data.get('receiver')
-            if not receiver:
+        # 验证参数
+        if not username:
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '发送者不能为空'
+            }
+
+        if not receiver:
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '接收者不能为空'
+            }
+
+        if not content.strip():
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息内容不能为空'
+            }
+
+        # 检查发送者是否在线
+        if not self.connection_manager.is_client_connected(username):
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '发送者未登录'
+            }
+
+        # 检查接收者是否在线
+        if not self.connection_manager.is_client_connected(receiver):
+            return {
+                'type': 'error',
+                'success': False,
+                'message': f'用户 {receiver} 不在线'
+            }
+
+        try:
+            # 获取file_size并确保是整数类型
+            file_size = request_data.get('size', 0)
+            if isinstance(file_size, str):
+                try:
+                    file_size = int(file_size)
+                except ValueError:
+                    file_size = 0
+            
+            # 发送私聊消息
+            success = await self.connection_manager.message_manager.send_private_message(
+                sender_username=username,
+                receiver_username=receiver,
+                content=content,
+                content_type=content_type,
+                timestamp=timestamp,
+                file_data=request_data.get('data', ''),
+                filename=request_data.get('filename', ''),
+                file_size=file_size
+            )
+
+            if success:
                 return {
-                    'type': 'error',
-                    'success': False,
-                    'message': '私聊消息必须指定接收者'
+                    'type': 'private_message_sent',
+                    'success': True,
+                    'message': '私聊消息发送成功'
                 }
-
-            if not username or not self.connection_manager.is_client_connected(username):
-                return {
-                    'type': 'error',
-                    'success': False,
-                    'message': '用户未登录'
-                }
-
-            if not content.strip():
-                return {
-                    'type': 'error',
-                    'success': False,
-                    'message': '消息内容不能为空'
-                }
-
-            # 检查接收者是否在线
-            if not self.connection_manager.is_client_connected(receiver):
-                return {
-                    'type': 'error',
-                    'success': False,
-                    'message': f'用户 {receiver} 不在线'
-                }
-
-            try:
-                # 获取file_size并确保是整数类型
-                file_size = request_data.get('size', 0)
-                if isinstance(file_size, str):
-                    try:
-                        file_size = int(file_size)
-                    except ValueError:
-                        file_size = 0
-                
-                # 发送私聊消息
-                success = await self.connection_manager.message_manager.send_private_message(
-                    sender_username=username,
-                    receiver_username=receiver,
-                    content=content,
-                    content_type=content_type,
-                    timestamp=timestamp,
-                    file_data=request_data.get('data', ''),
-                    filename=request_data.get('filename', ''),
-                    file_size=file_size
-                )
-
-                if success:
-                    return {
-                        'type': 'private_message_sent',
-                        'success': True,
-                        'message': '私聊消息发送成功'
-                    }
-                else:
-                    return {
-                        'type': 'error',
-                        'success': False,
-                        'message': '私聊消息发送失败'
-                    }
-
-            except Exception as e:
-                log.error(f"私聊消息处理失败: {e}")
+            else:
                 return {
                     'type': 'error',
                     'success': False,
                     'message': '私聊消息发送失败'
                 }
+
+        except Exception as e:
+            log.error(f"私聊消息处理失败: {e}")
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息发送失败'
+            }
+
+    # 修改原来的handle_message方法，只处理公共消息
+    async def handle_message(self, request_data: Dict[str, Any], client_socket=None) -> Dict[str, Any]:
+        """处理公共消息请求（支持多种消息类型）"""
+        # 检查是否为私聊消息，如果是则拒绝处理
+        if request_data.get('receiver') or request_data.get('message_type') == 'private':
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '私聊消息请使用private消息类型'
+            }
+            
+        username = request_data.get('username')
+        content_type = request_data.get('content_type', 'text')
+        content = request_data.get('content', '')
+        timestamp = request_data.get('timestamp', time.time())
 
         # 处理普通消息（公共消息）
         if not username or not self.connection_manager.is_client_connected(username):
