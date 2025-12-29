@@ -48,6 +48,13 @@ class PrivateMessageCRUD:
             raise e
 
     @staticmethod
+    async def get_by_conversation_id(db: AsyncSession, conversation_id: str, limit: int = 50):
+        """
+        根据会话ID获取最新的limit条私聊消息（兼容方法）
+        """
+        return await PrivateMessageCRUD.get_by_conversation(db, conversation_id, limit)
+
+    @staticmethod
     async def mark_as_read(db: AsyncSession, message_id: str):
         """
         将指定消息标记为已读

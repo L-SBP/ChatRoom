@@ -59,6 +59,14 @@ class MessageHandler:
                 }
 
             try:
+                # 获取file_size并确保是整数类型
+                file_size = request_data.get('size', 0)
+                if isinstance(file_size, str):
+                    try:
+                        file_size = int(file_size)
+                    except ValueError:
+                        file_size = 0
+                
                 # 发送私聊消息
                 success = await self.connection_manager.message_manager.send_private_message(
                     sender_username=username,
@@ -68,7 +76,7 @@ class MessageHandler:
                     timestamp=timestamp,
                     file_data=request_data.get('data', ''),
                     filename=request_data.get('filename', ''),
-                    file_size=request_data.get('size', 0)
+                    file_size=file_size
                 )
 
                 if success:
@@ -180,4 +188,34 @@ class MessageHandler:
                 'type': 'error',
                 'success': False,
                 'message': '获取历史消息失败'
+            }
+    
+    async def handle_get_private_history(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """处理获取私聊历史消息的请求"""
+        try:
+            conversation_id = request_data.get('conversation_id')
+            limit = request_data.get('limit', 50)
+            
+            if not conversation_id:
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '会话ID不能为空'
+                }
+            
+            # 获取私聊历史消息
+            history_messages = await self.connection_manager.message_manager.get_private_history_messages(conversation_id, limit)
+            
+            return {
+                'type': 'private_history',
+                'success': True,
+                'messages': history_messages
+            }
+            
+        except Exception as e:
+            log.error(f"获取私聊历史消息失败: {e}")
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '获取私聊历史消息失败'
             }

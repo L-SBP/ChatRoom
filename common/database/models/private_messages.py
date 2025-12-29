@@ -1,4 +1,4 @@
-from sqlalchemy import Column, UUID, VARCHAR, TEXT, Boolean, DateTime, func, ForeignKey, CheckConstraint
+from sqlalchemy import Column, UUID, VARCHAR, TEXT, Boolean, DateTime, func, ForeignKey, CheckConstraint, Integer, BigInteger
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -47,7 +47,7 @@ class PrivateMessage(BaseModel):
 
     file_name = Column(VARCHAR(255))
 
-    file_size = Column(TEXT)  # BIGINT在SQLAlchemy中映射为TEXT
+    file_size = Column(BigInteger)  # 修改为BigInteger类型对应数据库的bigint
 
     metadata_ = Column("metadata", JSONB)
 

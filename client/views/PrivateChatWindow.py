@@ -154,10 +154,10 @@ class PrivateChatWindow(QMainWindow):
             # 根据消息发送者判断显示样式
             if message.username == self.current_user:
                 # 自己发送的消息
-                self.message_area.add_message(message, is_own=True)
+                self.message_area.add_message(message)
             else:
                 # 接收的消息
-                self.message_area.add_message(message, is_own=False)
+                self.message_area.add_message(message)
             # 滚动到底部
             self.message_area.scroll_to_bottom()
             log.debug(f"添加私聊消息: {message.content[:50]}...")

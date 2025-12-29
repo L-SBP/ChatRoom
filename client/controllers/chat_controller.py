@@ -278,21 +278,47 @@ class ChatController(QObject):
         """获取历史消息"""
         return self.network_manager.get_history_messages(message_id, limit)
     
+    def get_private_history_messages(self, conversation_id: str, limit: int = 50) -> bool:
+        """获取私聊历史消息"""
+        try:
+            if not self.network_manager.is_connected():
+                self.system_message.emit("未连接到服务器")
+                return False
+            
+            # 发送获取私聊历史消息的请求
+            data = {
+                'type': 'get_private_history',
+                'conversation_id': conversation_id,
+                'limit': limit
+            }
+            self.network_manager.send_data(data)
+            return True
+        except Exception as e:
+            log.error(f"获取私聊历史消息时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
     def on_message_received(self, message_obj):
         """处理接收到的消息"""
         try:
             if isinstance(message_obj, list):
                 # 历史消息列表
                 for msg in message_obj:
-                    self.message_received.emit(msg)
+                    # 判断是否为私聊消息
+                    if hasattr(msg, 'content_type') and hasattr(msg, 'receiver_name') and hasattr(msg, 'conversation_id'):
+                        # 私聊历史消息
+                        self.message_received.emit(msg)
+                    else:
+                        # 普通历史消息
+                        self.message_received.emit(msg)
                 return
             
             # 检查是否为私聊消息
             if hasattr(message_obj, 'content_type') and hasattr(message_obj, 'receiver_name'):
-                if message_obj.content_type == 'private' or hasattr(message_obj, 'receiver_name'):
-                    # 私聊消息
-                    self.message_received.emit(message_obj)
-                    return
+                # 私聊消息
+                self.message_received.emit(message_obj)
+                return
             
             # 普通消息处理
             if hasattr(message_obj, 'content_type'):

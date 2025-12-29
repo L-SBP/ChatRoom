@@ -42,6 +42,7 @@ class RequestDispatcher:
             'refresh_users': self.user_handler.handle_refresh_users,
             'logout': self.auth_handler.handle_logout,
             'get_history': self.message_handler.handle_get_history,
+            'get_private_history': self.message_handler.handle_get_private_history,
         }
 
     async def dispatch(self, request_type: str, request_data: Dict[str, Any],

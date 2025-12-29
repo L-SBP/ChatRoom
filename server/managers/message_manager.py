@@ -117,7 +117,7 @@ class MessageManager:
             if content_type in ['image', 'video', 'file', 'audio'] and filename:
                 message_data.update({
                     'file_name': filename,
-                    'file_size': str(file_size) if file_size else '0'
+                    'file_size': int(file_size) if file_size else 0
                 })
 
             saved_message = await self.private_message_crud.create(session, **message_data)
@@ -130,7 +130,7 @@ class MessageManager:
         # 检查接收者是否在线
         if self.connection_manager.is_client_connected(receiver_username):
             # 获取接收者的socket连接
-            receiver_client = self.connection_manager.get_client_by_username(receiver_username)
+            receiver_client = self.connection_manager.get_client(receiver_username)
             if receiver_client:
                 try:
                     # 发送私聊消息给接收者
@@ -519,4 +519,46 @@ class MessageManager:
                 
         except Exception as e:
             log.error(f"获取历史消息失败: {e}")
+            return []
+
+    async def get_private_history_messages(self, conversation_id: str, limit: int = 50) -> List[dict]:
+        """
+        获取私聊历史消息
+        """
+        try:
+            async with PgHelper.get_async_session(self.db_engine) as session:
+                # 获取会话的所有消息
+                messages = await self.private_message_crud.get_by_conversation_id(
+                    session, conversation_id, limit=limit
+                )
+                
+                history_messages = []
+                for msg in messages:
+                    # 获取发送者和接收者的用户名
+                    sender = await user_crud.get_by_id(session, str(msg.sender_id))
+                    receiver = await user_crud.get_by_id(session, str(msg.receiver_id))
+                    
+                    sender_name = sender.username if sender else "未知用户"
+                    receiver_name = receiver.username if receiver else "未知用户"
+                    
+                    # 格式化消息
+                    message_data = {
+                        'message_id': str(msg.message_id),  # 确保UUID转为字符串
+                        'conversation_id': str(msg.conversation_id),
+                        'username': sender_name,
+                        'receiver': receiver_name,
+                        'content_type': msg.content_type,
+                        'content': msg.content,
+                        'timestamp': msg.created_at.isoformat(),  # 使用ISO格式时间戳
+                        'file_size': msg.file_size,
+                        'file_name': msg.file_name,
+                        'is_read': msg.is_read
+                    }
+                    history_messages.append(message_data)
+                
+                # 按时间顺序返回（从旧到新）
+                return history_messages
+                
+        except Exception as e:
+            log.error(f"获取私聊历史消息失败: {e}")
             return []

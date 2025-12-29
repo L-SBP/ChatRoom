@@ -232,6 +232,12 @@ class ClientHandler:
                             message_handler = MessageHandler(self.connection_manager)
                             response = await message_handler.handle_get_history(request)
                             await self._send_response(response)
+                        elif request_type == 'get_private_history':
+                            # 处理获取私聊历史消息请求
+                            from server.handlers.message_handler import MessageHandler
+                            message_handler = MessageHandler(self.connection_manager)
+                            response = await message_handler.handle_get_private_history(request)
+                            await self._send_response(response)
                         elif request_type == 'logout':
                             # 退出所有循环，触发清理
                             return

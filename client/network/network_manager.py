@@ -362,6 +362,82 @@ class NetworkThread(QThread):
             else:
                 # 如果没有历史消息，发送空列表
                 self.message_received.emit([])
+        
+        elif msg_type == 'private_history':
+            # 处理私聊历史消息响应
+            success = data.get('success', False)
+            messages = data.get('messages', [])
+            
+            if success and messages:
+                private_message_vos = []
+                for msg in messages:
+                    # 转换时间戳
+                    timestamp_str = msg.get('timestamp')
+                    created_at = None
+                    if timestamp_str:
+                        try:
+                            # 如果是ISO格式的时间字符串，直接解析
+                            if isinstance(timestamp_str, str):
+                                created_at = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            else:
+                                # 如果是时间戳，转换为datetime对象
+                                created_at = datetime.fromtimestamp(timestamp_str)
+                        except ValueError:
+                            # 如果解析失败，使用当前时间
+                            created_at = datetime.now()
+                    
+                    # 处理文件类型消息
+                    file_vo = None
+                    content_type = msg.get('content_type', 'text')
+                    if content_type in ['image', 'video', 'audio', 'file']:
+                        filename = msg.get('file_name', '') or msg.get('filename', '')
+                        file_size = msg.get('file_size', 0)
+                        if isinstance(file_size, str):
+                            try:
+                                file_size = int(file_size)
+                            except ValueError:
+                                file_size = 0
+                    
+                        # 创建文件VO对象
+                        file_vo = FileVO(
+                            file_id=msg.get('file_id', ''),
+                            file_name=filename,
+                            file_url=msg.get('file_url', ''),
+                            file_type=content_type,
+                            file_size=file_size,
+                            created_at=created_at
+                        )
+                        
+                        # 尝试从本地下载目录查找文件
+                        if filename:
+                            # 构建本地文件路径（与save_file方法一致）
+                            download_dir = os.path.join(os.path.expanduser('~'), 'Downloads', 'ChatRoom')
+                            local_file_path = os.path.join(download_dir, filename)
+                            if os.path.exists(local_file_path):
+                                # 如果本地文件存在，更新file_url为本地路径
+                                file_vo.file_url = local_file_path
+                    
+                    # 创建私聊消息VO对象
+                    from client.models.vo import PrivateMessageVO
+                    private_message_vo = PrivateMessageVO(
+                        message_id=msg.get('message_id', ''),
+                        user_id='',
+                        username=msg.get('username', ''),
+                        receiver_name=msg.get('receiver', ''),
+                        content_type=content_type,
+                        content=msg.get('content', ''),
+                        file_vo=file_vo,
+                        created_at=created_at,
+                        conversation_id=msg.get('conversation_id', ''),
+                        is_read=msg.get('is_read', False)
+                    )
+                    private_message_vos.append(private_message_vo)
+                
+                # 发送私聊历史消息信号
+                self.message_received.emit(private_message_vos)
+            else:
+                # 如果没有私聊历史消息，发送空列表
+                self.message_received.emit([])
     
     def login(self, username: str, password: str) -> None:
         """发送登录请求"""
