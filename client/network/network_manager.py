@@ -22,7 +22,7 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-from client.models.vo import MessageVO, FileVO, UserVO
+from client.models.vo import MessageVO, FileVO, UserVO, PrivateMessageVO
 from common.log import client_log as log
 
 
@@ -103,11 +103,6 @@ class NetworkThread(QThread):
             # 获取消息发送者
             username = data.get('username', '')
             
-            # 如果是自己发送的消息，忽略它（因为已有本地回显）
-            if username == self.username:
-                log.debug(f"网络层忽略自己发送的私聊消息: {username}")
-                return
-            
             # 处理接收到的私聊消息
             receiver = data.get('receiver', '')
             content = data.get('content', '')
@@ -119,13 +114,34 @@ class NetworkThread(QThread):
                 try:
                     timestamp = float(timestamp)
                 except ValueError:
-                    timestamp = time.time()
+                    try:
+                        # 尝试解析格式化时间字符串如 '22:47:30'
+                        import datetime as dt_module
+                        time_obj = dt_module.datetime.strptime(timestamp, '%H:%M:%S').time()
+                        dt = dt_module.datetime.combine(dt_module.date.today(), time_obj)
+                        timestamp = dt.timestamp()
+                    except ValueError:
+                        timestamp = time.time()
             
             # 创建私聊消息VO对象
-            from client.models.vo import PrivateMessageVO
+            # 根据服务器发送的用户名和user1_name/user2_name确定正确的user_id
+            user1_name = data.get('user1_name', '')
+            user1_id = data.get('user1_id', '')
+            user2_name = data.get('user2_name', '')
+            user2_id = data.get('user2_id', '')
+            
+            # 确定消息发送者的user_id
+            if username == user1_name:
+                user_id = user1_id
+            elif username == user2_name:
+                user_id = user2_id
+            else:
+                # 默认使用user1_id作为fallback
+                user_id = user1_id
+            
             private_message_vo = PrivateMessageVO(
                 message_id=data.get('message_id', ''),
-                user_id=data.get('user_id', ''),
+                user_id=user_id,
                 username=username,
                 receiver_name=receiver,
                 content_type=content_type,
@@ -425,7 +441,6 @@ class NetworkThread(QThread):
                                 file_vo.file_url = local_file_path
                     
                     # 创建私聊消息VO对象
-                    from client.models.vo import PrivateMessageVO
                     private_message_vo = PrivateMessageVO(
                         message_id=msg.get('message_id', ''),
                         user_id='',
@@ -445,7 +460,32 @@ class NetworkThread(QThread):
             else:
                 # 如果没有私聊历史消息，发送空列表
                 self.message_received.emit([])
-    
+
+        elif msg_type == 'private_message_sent':
+            # 处理私聊消息发送成功确认
+            success = data.get('success', False)
+            message = data.get('message', '')
+            if success:
+                log.info(f"私聊消息发送成功: {message}")
+            else:
+                log.error(f"私聊消息发送失败: {message}")
+                # 可以在这里发送一个系统消息通知用户
+                error_msg = MessageVO(
+                    message_id="",
+                    user_id="system",
+                    username="系统",
+                    content_type="system",
+                    content=f"私聊消息发送失败: {message}",
+                    created_at=datetime.now()
+                )
+                self.message_received.emit(error_msg)
+
+        elif msg_type == 'conversation_info':
+            # 处理会话信息响应
+            log.debug(f"网络层处理会话信息响应: {data}")
+            # 将会话信息传递给控制器
+            self.message_received.emit(data)
+
     def login(self, username: str, password: str) -> None:
         """发送登录请求"""
         log.debug(f"NetworkThread.login 开始发送登录请求: 用户名={username}, running={self.running}, client_socket={self.client_socket}")

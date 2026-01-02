@@ -65,9 +65,11 @@ def get_logger():
     stack = inspect.stack()
     for frame_info in stack[1:]:
         module_path = frame_info.filename
-        if "client/" in module_path:
+        # 使用os.path.sep处理不同操作系统的路径分隔符
+        import os
+        if f"client{os.path.sep}" in module_path or "client/" in module_path:
             return logger.bind(log_source="client")
-        elif "server/" in module_path:
+        elif f"server{os.path.sep}" in module_path or "server/" in module_path:
             return logger.bind(log_source="server")
     return logger
 

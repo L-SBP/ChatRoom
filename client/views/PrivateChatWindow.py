@@ -14,7 +14,7 @@ class PrivateChatWindow(QMainWindow):
     # 发送消息信号
     send_message = pyqtSignal(str, str, str)  # conversation_id, content, target_username
     # 关闭窗口信号
-    window_closed = pyqtSignal(str)  # conversation_id
+    window_closed = pyqtSignal(str)  # chat_target
     # 加载历史消息信号
     load_history = pyqtSignal(str, int)  # conversation_id, limit
     
@@ -24,6 +24,7 @@ class PrivateChatWindow(QMainWindow):
         self.current_user = current_user
         self.controller = controller
         self.is_open = False
+        self.pending_messages = []  # 存储待发送的消息，当会话ID获取后发送
         
         # 根据当前用户确定聊天对象
         if conversation.user1_name == current_user:
@@ -124,9 +125,19 @@ class PrivateChatWindow(QMainWindow):
         if content:
             log.debug(f"发送私聊消息: {content} 给 {self.chat_target}")
             
+            # 如果还没有会话ID，先获取或创建会话
+            conversation_id = self.conversation.conversation_id if self.conversation else ""
+            if not conversation_id and self.controller:
+                log.debug(f"没有会话ID，先获取或创建与{self.chat_target}的会话")
+                self.controller.get_or_create_conversation(self.current_user, self.chat_target)
+                # 暂时将消息存储到待发送列表
+                self.pending_messages.append(content)
+                self.message_input.clear()
+                return
+            
             # 发送消息信号
             self.send_message.emit(
-                self.conversation.conversation_id, 
+                conversation_id, 
                 content, 
                 self.chat_target
             )
@@ -150,19 +161,22 @@ class PrivateChatWindow(QMainWindow):
     
     def add_private_message(self, message: PrivateMessageVO):
         """添加私聊消息"""
+        log.debug(f"PrivateChatWindow.add_private_message called with message: {message}")
         if isinstance(message, PrivateMessageVO):
             # 根据消息发送者判断显示样式
             if message.username == self.current_user:
                 # 自己发送的消息
+                log.debug(f"Adding own message to chat area: {message.content[:50]}...")
                 self.message_area.add_message(message)
             else:
                 # 接收的消息
+                log.debug(f"Adding received message to chat area: {message.content[:50]}...")
                 self.message_area.add_message(message)
             # 滚动到底部
             self.message_area.scroll_to_bottom()
-            log.debug(f"添加私聊消息: {message.content[:50]}...")
+            log.debug(f"Added private message: {message.content[:50]}...")
         else:
-            log.error(f"不是PrivateMessageVO类型: {type(message)}")
+            log.error(f"add_private_message: Not a PrivateMessageVO type: {type(message)}")
     
     def load_history_messages(self, messages: list):
         """加载历史消息"""
@@ -173,33 +187,102 @@ class PrivateChatWindow(QMainWindow):
             for message in messages:
                 self.add_private_message(message)
             log.debug(f"加载历史消息成功，共{len(messages)}条")
-    
+
     def show(self):
         """显示窗口"""
         super().show()
         self.is_open = True
-        # 加载历史消息
-        self.load_history.emit(self.conversation.conversation_id, 50)
-    
+        # 如果有会话ID，直接加载历史消息
+        if self.conversation and self.conversation.conversation_id:
+            self.load_history.emit(self.conversation.conversation_id, 50)
+        # 否则等待会话ID更新后再加载历史消息
+
     def closeEvent(self, event):
         """关闭窗口事件"""
         self.is_open = False
-        self.window_closed.emit(self.conversation.conversation_id)
-        log.debug(f"私聊窗口关闭: {self.conversation.conversation_id}")
+        self.window_closed.emit(self.chat_target)
+        log.debug(f"私聊窗口关闭: {self.chat_target}")
         event.accept()
     
     def bring_to_front(self):
         """将窗口置顶显示"""
-        self.show()
+        log.debug(f"PrivateChatWindow.bring_to_front called for {self.chat_target}")
+        
+        # 确保窗口是可见的
+        if not self.isVisible():
+            self.show()
+        
+        # 将窗口置顶
         self.raise_()
+        
+        # 激活窗口
+        self.activateWindow()
+        
+        # 确保窗口不被最小化
+        if self.isMinimized():
+            self.showNormal()
+        
+        # 将窗口移到屏幕中央，确保用户能看到
+        self.move_to_center()
+        
+        log.debug(f"PrivateChatWindow.bring_to_front completed for {self.chat_target}")
+        
+    def move_to_center(self):
+        """将窗口移到屏幕中央"""
+        screen_geometry = self.screen().geometry()
+        window_geometry = self.frameGeometry()
+        window_geometry.moveCenter(screen_geometry.center())
+        self.move(window_geometry.topLeft())
+    
+    def update_conversation(self, conversation: ConversationVO):
+        """更新会话信息"""
+        old_conversation_id = self.conversation.conversation_id if self.conversation else ""
+        self.conversation = conversation
+        
+        # 根据更新后的会话重新确定聊天对象
+        if conversation.user1_name == self.current_user:
+            self.chat_target = conversation.user2_name
+            self.chat_target_id = conversation.user2_id
+        else:
+            self.chat_target = conversation.user1_name
+            self.chat_target_id = conversation.user1_id
+            
+        # 更新窗口标题
+        self.setWindowTitle(f"私聊 - {self.chat_target}")
+        
+        # 如果会话ID发生了变化，加载历史消息
+        if conversation.conversation_id and conversation.conversation_id != old_conversation_id:
+            self.load_history.emit(conversation.conversation_id, 50)
+            
+            # 发送待发送的消息
+            if self.pending_messages:
+                log.debug(f"发送待发送的消息，共 {len(self.pending_messages)} 条")
+                for msg_content in self.pending_messages:
+                    self.send_message.emit(
+                        conversation.conversation_id,
+                        msg_content,
+                        self.chat_target
+                    )
+                # 清空待发送列表
+                self.pending_messages.clear()
+        
         self.activateWindow()
         # 确保窗口不被最小化
         if self.isMinimized():
             self.showNormal()
-    
-    def update_conversation(self, conversation: ConversationVO):
-        """更新会话信息"""
-        self.conversation = conversation
+        
+        # 检查是否有待发送消息，如果有则使用新的会话ID发送
+        if conversation.conversation_id and self.pending_messages:
+            log.debug(f"会话ID已获取，发送待发送消息列表，共{len(self.pending_messages)}条")
+            for pending_content in self.pending_messages:
+                # 发送消息信号
+                self.send_message.emit(
+                    conversation.conversation_id, 
+                    pending_content, 
+                    self.chat_target
+                )
+            # 清空待发送消息列表
+            self.pending_messages.clear()
     
     def get_conversation_id(self):
         """获取会话ID"""

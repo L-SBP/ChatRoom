@@ -248,6 +248,45 @@ class PrivateMessageVO(MessageVO):
             'is_read': self.is_read
         })
         return base_dict
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PrivateMessageVO':
+        """从字典创建PrivateMessageVO对象"""
+        vo = cls()
+        vo.message_id = data.get('message_id', '')
+        vo.user_id = data.get('user_id', '')
+        vo.username = data.get('username', '')
+        vo.content = data.get('content', '')
+        vo.content_type = data.get('content_type', 'text')
+        vo.avatar_url = data.get('avatar_url', '')
+        vo.conversation_id = data.get('conversation_id', '')
+        vo.sender_id = data.get('sender_id', '')
+        vo.receiver_id = data.get('receiver_id', '')
+        vo.receiver_name = data.get('receiver', '') or data.get('receiver_name', '')
+        vo.receiver_avatar = data.get('receiver_avatar', '')
+        vo.is_read = data.get('is_read', False)
+        
+        # 处理时间戳
+        created_at_str = data.get('created_at')
+        vo.created_at = datetime.now()  # 默认值
+        
+        if created_at_str:
+            try:
+                if isinstance(created_at_str, str):
+                    if len(created_at_str) == 8:  # HH:MM:SS格式
+                        current_date = datetime.now().date()
+                        parsed_time = datetime.strptime(created_at_str, '%H:%M:%S').time()
+                        vo.created_at = datetime.combine(current_date, parsed_time)
+                    elif created_at_str.isdigit():
+                        vo.created_at = datetime.fromtimestamp(float(created_at_str))
+                    else:
+                        vo.created_at = datetime.fromisoformat(created_at_str)
+                elif isinstance(created_at_str, datetime):
+                    vo.created_at = created_at_str
+            except Exception:
+                vo.created_at = datetime.now()
+        
+        return vo
 
 
 @dataclass

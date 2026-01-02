@@ -41,6 +41,30 @@ class UsersCRUD:
         except Exception as e:
             log.error(f"获取用户失败: {e}")
             raise e
+    
+    @staticmethod
+    async def get_by_id(db: AsyncSession, user_id) -> Users:
+        """
+        根据用户ID获取用户实例
+        """
+        try:
+            import uuid
+            
+            # 确保user_id是字符串类型，避免UUID对象转换错误
+            if isinstance(user_id, uuid.UUID):
+                user_id_str = str(user_id)
+            else:
+                user_id_str = user_id
+            
+            # 直接使用字符串进行比较，不再次包装为UUID对象
+            query = select(Users).where(Users.user_id == user_id_str)
+            result = await db.execute(query)
+            user = result.scalar_one_or_none()
+            log.info(f"根据ID获取用户成功: {user}")
+            return user
+        except Exception as e:
+            log.error(f"根据ID获取用户失败: {e}")
+            raise e
 
     @staticmethod
     async def update(db: AsyncSession, user: Users, **kwargs):

@@ -44,6 +44,7 @@ class ChatRoomClient:
 
     def run(self):
         """启动客户端"""
+        log.info("客户端启动开始")
         # ========== 关键修改：添加高DPI 适配（必须在QApplication创建前） ==========
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)  # 跟随系统缩放比例
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)  # 高清像素图支持

@@ -238,6 +238,12 @@ class ClientHandler:
                             message_handler = MessageHandler(self.connection_manager)
                             response = await message_handler.handle_get_private_history(request)
                             await self._send_response(response)
+                        elif request_type == 'get_conversation':
+                            # 处理获取或创建会话ID请求
+                            from server.handlers.message_handler import MessageHandler
+                            message_handler = MessageHandler(self.connection_manager)
+                            response = await message_handler.handle_get_conversation(request)
+                            await self._send_response(response)
                         elif request_type == 'logout':
                             # 退出所有循环，触发清理
                             return
@@ -300,24 +306,15 @@ class ClientHandler:
             })
             return
 
-        # 检查接收者是否在线
-        if not self.connection_manager.is_client_connected(receiver):
-            await self._send_response({
-                'type': 'error',
-                'success': False,
-                'message': f'用户 {receiver} 不在线'
-            })
-            return
-
-        # 添加发送者信息到请求中，确保请求分发器能正确处理
+        # 添加发送者信息到请求中
         request['username'] = self.username
         request['sender'] = self.username  # 明确添加sender字段
         
-        # 通过请求分发器处理私聊消息
+        # 通过消息处理器处理私聊消息
         try:
-            from server.handlers.request_dispatcher import RequestDispatcher
-            dispatcher = RequestDispatcher(self.connection_manager)
-            response = await dispatcher.dispatch('private', request, self.client_socket, self.client_address)
+            from server.handlers.message_handler import MessageHandler
+            message_handler = MessageHandler(self.connection_manager)
+            response = await message_handler.handle_private_message(request, self.client_socket, self.client_address)
             
             if response:
                 await self._send_response(response)

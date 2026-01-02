@@ -84,25 +84,6 @@ class MessageManager:
                     user2_id=max(str(sender.user_id), str(receiver.user_id))
                 )
 
-            # 构造私聊消息
-            private_message = {
-                'type': 'private',
-                'message_type': 'private',
-                'username': sender_username,
-                'receiver': receiver_username,
-                'content': content,
-                'content_type': content_type,
-                'timestamp': time.strftime('%H:%M:%S', time.localtime(timestamp))
-            }
-
-            # 如果是文件类型，添加文件相关信息
-            if content_type in ['image', 'video', 'file', 'audio'] and filename:
-                private_message.update({
-                    'filename': filename,
-                    'data': file_data,
-                    'size': file_size
-                })
-
             # 保存私聊消息到数据库
             message_data = {
                 'conversation_id': str(conversation.conversation_id),
@@ -122,12 +103,42 @@ class MessageManager:
 
             saved_message = await self.private_message_crud.create(session, **message_data)
 
+            # 构造私聊消息
+            private_message = {
+                'type': 'private',
+                'message_type': 'private',
+                'message_id': str(saved_message.message_id),  # 添加message_id字段
+                'user_id': str(sender.user_id),  # 添加发送者ID
+                'username': sender_username,
+                'receiver': receiver_username,
+                'content': content,
+                'content_type': content_type,
+                'timestamp': timestamp,  # 发送原始数值时间戳
+                'formatted_time': time.strftime('%H:%M:%S', time.localtime(timestamp)),  # 保留格式化时间用于向后兼容
+                'conversation_id': str(conversation.conversation_id),
+                'user1_id': str(conversation.user1_id),
+                'user1_name': sender_username if str(conversation.user1_id) == str(sender.user_id) else receiver_username,
+                'user2_id': str(conversation.user2_id),
+                'user2_name': receiver_username if str(conversation.user2_id) == str(receiver.user_id) else sender_username
+            }
+
+            # 如果是文件类型，添加文件相关信息
+            if content_type in ['image', 'video', 'file', 'audio'] and filename:
+                private_message.update({
+                    'filename': filename,
+                    'data': file_data,
+                    'size': file_size
+                })
+
             # 更新会话的最后消息信息
             await self.private_conversation_crud.update_last_message(
                 session, str(conversation.conversation_id), str(saved_message.message_id)
             )
+            
+            # 提交事务
+            await session.commit()
 
-        # 检查接收者是否在线
+        # 发送消息给接收者
         if self.connection_manager.is_client_connected(receiver_username):
             # 获取接收者的socket连接
             receiver_client = self.connection_manager.get_client(receiver_username)
@@ -136,11 +147,6 @@ class MessageManager:
                     # 发送私聊消息给接收者
                     receiver_client.socket.send(json.dumps(private_message).encode('utf-8'))
                     log.info(f"私聊消息已发送给接收者: {sender_username} -> {receiver_username}")
-                    
-                    # 重要：不再回传给发送者，因为发送者已经有本地回显了
-                    # 发送者可以通过发送成功后立即显示消息，不需要服务器回传
-                    
-                    return True
                 except Exception as e:
                     log.error(f"发送私聊消息给 {receiver_username} 失败: {e}")
                     return False
@@ -149,7 +155,23 @@ class MessageManager:
                 return False
         else:
             log.info(f"接收者 {receiver_username} 不在线，消息已保存到数据库")
-            return True  # 消息已保存到数据库，返回True表示处理成功
+        
+        # 也发送消息给发送者，以便发送者能看到自己发送的消息
+        if self.connection_manager.is_client_connected(sender_username):
+            sender_client = self.connection_manager.get_client(sender_username)
+            if sender_client:
+                try:
+                    # 发送私聊消息给发送者
+                    sender_client.socket.send(json.dumps(private_message).encode('utf-8'))
+                    log.info(f"私聊消息已回传给发送者: {sender_username}")
+                except Exception as e:
+                    log.error(f"发送私聊消息给发送者 {sender_username} 失败: {e}")
+                    return False
+            else:
+                log.error(f"无法找到发送者 {sender_username} 的客户端信息")
+                return False
+        
+        return True  # 消息已处理完成
 
     async def broadcast_file(self, username: str, filename: str,
                              file_data: str, file_size: int, sender_socket=None, content_type: str = 'file') -> None:
@@ -525,16 +547,68 @@ class MessageManager:
             log.error(f"获取历史消息失败: {e}")
             return []
 
+    async def get_or_create_conversation(self, username1: str, username2: str) -> Optional[dict]:
+        """
+        根据两个用户名获取或创建私聊会话
+        """
+        try:
+            async with PgHelper.get_async_session(self.db_engine) as session:
+                # 获取两个用户的信息
+                user1 = await user_crud.get_by_username(session, username1)
+                user2 = await user_crud.get_by_username(session, username2)
+                
+                if not user1 or not user2:
+                    log.error(f"获取或创建会话失败: 用户不存在 - {username1}, {username2}")
+                    return None
+
+                # 获取或创建私聊会话
+                conversation = await self.private_conversation_crud.get_by_users(
+                    session, str(user1.user_id), str(user2.user_id)
+                )
+                if not conversation:
+                    # 创建新的私聊会话
+                    conversation = await self.private_conversation_crud.create(
+                        session,
+                        user1_id=min(str(user1.user_id), str(user2.user_id)),
+                        user2_id=max(str(user1.user_id), str(user2.user_id))
+                    )
+
+                # 根据会话的user1_id和user2_id匹配对应的用户名
+                if str(conversation.user1_id) == str(user1.user_id):
+                    user1_name = user1.username
+                    user2_name = user2.username
+                else:
+                    user1_name = user2.username
+                    user2_name = user1.username
+                
+                # 提交事务
+                await session.commit()
+                
+                # 返回会话信息
+                return {
+                    'conversation_id': str(conversation.conversation_id),
+                    'user1_id': str(conversation.user1_id),
+                    'user1_name': user1_name,
+                    'user2_id': str(conversation.user2_id),
+                    'user2_name': user2_name
+                }
+                
+        except Exception as e:
+            log.error(f"获取或创建会话失败: {e}")
+            return None
+
     async def get_private_history_messages(self, conversation_id: str, limit: int = 50) -> List[dict]:
         """
         获取私聊历史消息
         """
         try:
+            log.debug(f"获取私聊历史消息 - conversation_id: {conversation_id}, limit: {limit}")
             async with PgHelper.get_async_session(self.db_engine) as session:
                 # 获取会话的所有消息
                 messages = await self.private_message_crud.get_by_conversation_id(
                     session, conversation_id, limit=limit
                 )
+                log.debug(f"找到 {len(messages)} 条私聊历史消息")
                 
                 history_messages = []
                 for msg in messages:

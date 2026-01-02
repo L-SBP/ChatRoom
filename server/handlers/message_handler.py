@@ -240,3 +240,40 @@ class MessageHandler:
                 'success': False,
                 'message': '获取私聊历史消息失败'
             }
+    
+    async def handle_get_conversation(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """处理获取或创建私聊会话的请求"""
+        try:
+            username1 = request_data.get('username1')
+            username2 = request_data.get('username2')
+            
+            if not username1 or not username2:
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '用户名不能为空'
+                }
+            
+            # 获取或创建私聊会话
+            conversation = await self.connection_manager.message_manager.get_or_create_conversation(username1, username2)
+            
+            if not conversation:
+                return {
+                    'type': 'error',
+                    'success': False,
+                    'message': '获取或创建会话失败'
+                }
+            
+            return {
+                'type': 'conversation_info',
+                'success': True,
+                'conversation': conversation
+            }
+            
+        except Exception as e:
+            log.error(f"获取或创建会话失败: {e}")
+            return {
+                'type': 'error',
+                'success': False,
+                'message': '获取或创建会话失败'
+            }

@@ -43,6 +43,7 @@ class RequestDispatcher:
             'logout': self.auth_handler.handle_logout,
             'get_history': self.message_handler.handle_get_history,
             'get_private_history': self.message_handler.handle_get_private_history,
+            'get_conversation': self.message_handler.handle_get_conversation,
         }
 
     async def dispatch(self, request_type: str, request_data: Dict[str, Any],
