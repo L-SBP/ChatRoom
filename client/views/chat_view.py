@@ -987,6 +987,14 @@ class ChatView(QMainWindow):
         success = self.controller.get_private_history_messages(conversation_id, limit)
         if not success:
             self.add_system_message("获取私聊历史消息失败")
+            # 找到对应的私聊窗口并重置加载状态
+            for private_chat_window in self.controller.private_chat_windows.values():
+                if hasattr(private_chat_window, 'conversation') and private_chat_window.conversation:
+                    if private_chat_window.conversation.conversation_id == conversation_id:
+                        # 重置加载状态
+                        private_chat_window.message_area._is_loading = False
+                        private_chat_window.message_area.load_history_btn.setEnabled(True)
+                        break
 
     def on_private_window_closed(self, chat_target: str):
         """处理私聊窗口关闭"""

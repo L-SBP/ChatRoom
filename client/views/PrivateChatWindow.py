@@ -118,6 +118,10 @@ class PrivateChatWindow(QMainWindow):
         self.message_input.textChanged.connect(self.on_input_text_changed)
         # 回车键发送消息
         self.message_input.keyPressEvent = self.on_key_press
+        # 连接加载历史消息按钮
+        self.message_area.load_history_btn.clicked.connect(self._load_more_messages)
+        # 设置消息区域的加载更多方法
+        self.message_area._load_more_messages = self._load_more_messages
     
     def on_send_message(self):
         """发送消息"""
@@ -187,6 +191,29 @@ class PrivateChatWindow(QMainWindow):
             for message in messages:
                 self.add_private_message(message)
             log.debug(f"加载历史消息成功，共{len(messages)}条")
+        # 重置加载状态
+        self.message_area._is_loading = False
+        self.message_area.load_history_btn.setEnabled(True)
+    
+    def _load_more_messages(self):
+        """加载更多历史消息"""
+        # 避免重复加载
+        if self.message_area._is_loading:
+            return
+        
+        # 加载消息时禁用按钮并设置加载状态
+        self.message_area._is_loading = True
+        self.message_area.load_history_btn.setDisabled(True)
+        
+        # 如果有会话ID，直接加载历史消息
+        if self.conversation and self.conversation.conversation_id:
+            self.load_history.emit(self.conversation.conversation_id, 50)
+            log.debug(f"PrivateChatWindow: 发送加载历史消息信号，会话ID: {self.conversation.conversation_id}")
+        else:
+            # 没有会话ID，获取或创建会话
+            log.debug(f"PrivateChatWindow: 没有会话ID，无法加载历史消息")
+            self.message_area._is_loading = False
+            self.message_area.load_history_btn.setEnabled(True)
 
     def show(self):
         """显示窗口"""
@@ -211,6 +238,8 @@ class PrivateChatWindow(QMainWindow):
         # 确保窗口是可见的
         if not self.isVisible():
             self.show()
+            # 只有首次显示窗口时才居中
+            self.move_to_center()
         
         # 将窗口置顶
         self.raise_()
@@ -221,9 +250,6 @@ class PrivateChatWindow(QMainWindow):
         # 确保窗口不被最小化
         if self.isMinimized():
             self.showNormal()
-        
-        # 将窗口移到屏幕中央，确保用户能看到
-        self.move_to_center()
         
         log.debug(f"PrivateChatWindow.bring_to_front completed for {self.chat_target}")
         
