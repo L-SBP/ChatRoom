@@ -414,3 +414,18 @@
 - **标准化**：与数据库模型保持一致，减少类型转换错误
 
 所有JSON消息都通过TCP套接字传输，使用UTF-8编码，支持多条JSON消息的连续传输。
+
+PyQt5==5.15.9
+PyQt5-sip==12.11.0
+pyyaml>=6.0           # 配置管理
+qdarkstyle>=3.0       # 深色主题
+python-dotenv>=1.0    # 环境变量
+Pillow>=10.0.0        # 图片处理与压缩
+
+pydantic==2.4.2
+pydantic-settings==2.1.0
+
+loguru==0.7.2
+
+asyncpg>=0.29.0
+sqlalchemy>=2.0.0

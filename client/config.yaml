@@ -19,7 +19,7 @@ config:
       normalSize: 11
 
   client:
-    default_server_host: "127.0.0.1"
+    default_server_host: "1.94.198.146"
     default_server_port: 8888
     max_file_size: 10485760  # 10MB
     timeout: 10

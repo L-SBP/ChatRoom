@@ -90,7 +90,7 @@ class ChatServer:
             try:
                 # 异步接受连接
                 client_socket, client_address = await loop.sock_accept(self.server_socket)
-                client_socket.setblocking(True)
+                client_socket.setblocking(False)
 
                 log.info(f"新连接来自: {client_address}")
 

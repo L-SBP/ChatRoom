@@ -48,47 +48,117 @@ class ClientHandler:
         """处理客户端认证"""
         try:
             loop = asyncio.get_event_loop()
+            buffer = b""  # 接收缓冲区
+            max_attempts = 5  # 最大尝试次数
+            attempt = 0
 
             # 接收认证请求
             log.debug(f"_handle_authentication 等待接收客户端 {self.client_address} 的认证请求")
-            data = await loop.sock_recv(self.client_socket, 1024)
-            if not data:
-                log.debug(f"_handle_authentication 未收到客户端 {self.client_address} 的认证数据，连接关闭")
-                return
+            
+            while attempt < max_attempts and not self.authenticated:
+                attempt += 1
+                try:
+                    # 接收数据
+                    data = await asyncio.wait_for(loop.sock_recv(self.client_socket, 1024), timeout=5.0)
+                    if not data:
+                        log.debug(f"_handle_authentication 未收到客户端 {self.client_address} 的认证数据，连接关闭")
+                        return
 
-            log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的认证数据: {data}")
-            # 解析请求
-            request = json.loads(data.decode('utf-8'))
-            request_type = request.get('type')
-            log.debug(f"_handle_authentication 解析客户端 {self.client_address} 的认证请求: {request}")
+                    log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的认证数据: {data}")
+                    buffer += data
 
-            # 处理不同类型的请求
-            if request_type == 'login':
-                log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的登录请求")
-                response = await self._handle_login(request)
-                # 登录成功时，响应已经在_handle_login中发送，返回None
-                if response is not None:
-                    log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的登录失败响应: {response}")
-                    await self._send_response(response)
-                else:
-                    log.debug(f"_handle_authentication 客户端 {self.client_address} 登录成功，响应已在_handle_login中发送")
-            elif request_type == 'register':
-                log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的注册请求")
-                response = await self._handle_register(request)
-                log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的注册响应: {response}")
-                await self._send_response(response)
-            else:
-                log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的未知请求类型: {request_type}")
-                response = {
-                    'type': 'error',
-                    'success': False,
-                    'message': f'未知的请求类型: {request_type}'
-                }
-                log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的错误响应: {response}")
-                await self._send_response(response)
+                    # 尝试解析缓冲区中的所有完整JSON对象
+                    while buffer:
+                        try:
+                            decoded_data = buffer.decode('utf-8')
+                            # 查找第一个完整的JSON对象
+                            if '{' not in decoded_data:
+                                break  # 没有JSON对象开始标记，继续接收
+                                
+                            # 简单的JSON解析方法，处理多个连续的JSON对象
+                            json_objects = []
+                            temp_data = decoded_data
+                            
+                            while '{' in temp_data:
+                                # 找到第一个JSON对象
+                                start_idx = temp_data.index('{')
+                                depth = 1
+                                end_idx = start_idx + 1
+                                
+                                while end_idx < len(temp_data) and depth > 0:
+                                    if temp_data[end_idx] == '{':
+                                        depth += 1
+                                    elif temp_data[end_idx] == '}':
+                                        depth -= 1
+                                    end_idx += 1
+                                
+                                if depth == 0:
+                                    # 找到完整的JSON对象
+                                    json_str = temp_data[start_idx:end_idx]
+                                    json_objects.append(json_str)
+                                    # 更新临时数据
+                                    temp_data = temp_data[end_idx:]
+                                else:
+                                    # 没有完整的JSON对象，继续接收
+                                    break
+                            
+                            if not json_objects:
+                                break  # 没有完整的JSON对象，继续接收
+                            
+                            # 处理所有找到的JSON对象
+                            for json_str in json_objects:
+                                request = json.loads(json_str)
+                                request_type = request.get('type')
+                                log.debug(f"_handle_authentication 解析客户端 {self.client_address} 的认证请求: {request}")
 
-        except json.JSONDecodeError:
-            log.warning(f"客户端 {self.client_address} 发送的数据格式错误: {data}")
+                                # 处理不同类型的请求
+                                if request_type == 'login':
+                                    log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的登录请求")
+                                    response = await self._handle_login(request)
+                                    # 登录成功时，响应已经在_handle_login中发送，返回None
+                                    if response is not None:
+                                        log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的登录失败响应: {response}")
+                                        await self._send_response(response)
+                                    else:
+                                        log.debug(f"_handle_authentication 客户端 {self.client_address} 登录成功，响应已在_handle_login中发送")
+                                        # 登录成功后，更新缓冲区并退出循环
+                                        remaining_data = temp_data[temp_data.index(json_str) + len(json_str):] if json_str in temp_data else ''
+                                        buffer = remaining_data.encode('utf-8') if remaining_data else b""
+                                        return
+                                elif request_type == 'register':
+                                    log.debug(f"_handle_authentication 处理客户端 {self.client_address} 的注册请求")
+                                    response = await self._handle_register(request)
+                                    log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的注册响应: {response}")
+                                    await self._send_response(response)
+                                    # 注册成功后不立即退出，允许后续操作
+                                else:
+                                    log.debug(f"_handle_authentication 收到客户端 {self.client_address} 的未知请求类型: {request_type}")
+                                    response = {
+                                        'type': 'error',
+                                        'success': False,
+                                        'message': f'未知的请求类型: {request_type}'
+                                    }
+                                    log.debug(f"_handle_authentication 发送客户端 {self.client_address} 的错误响应: {response}")
+                                    await self._send_response(response)
+                            
+                            # 更新缓冲区
+                            buffer = temp_data.encode('utf-8')
+                            
+                        except json.JSONDecodeError:
+                            # 解析失败，说明数据不完整，继续接收
+                            break
+                            
+                except asyncio.TimeoutError:
+                    log.debug(f"_handle_authentication 接收客户端 {self.client_address} 认证数据超时")
+                    if buffer:
+                        # 如果缓冲区有数据，尝试解析
+                        continue
+                    else:
+                        # 没有数据，超时退出
+                        break
+
+        except json.JSONDecodeError as e:
+            log.warning(f"客户端 {self.client_address} 发送的数据格式错误: {buffer}")
             await self._send_error("无效的消息格式")
         except Exception as e:
             log.error(f"处理客户端 {self.client_address} 认证时出错: {e}")
@@ -206,56 +276,86 @@ class ClientHandler:
                 # 尝试解析缓冲区中的所有完整JSON对象
                 while buffer:
                     try:
-                        # 查找JSON对象的开始和结束位置
-                        # 这是一个简单的实现，假设每个JSON对象都是完整的
                         decoded_data = buffer.decode('utf-8')
-                        # 尝试解析
-                        request = json.loads(decoded_data)
-                        request['username'] = self.username
-                        request_type = request.get('type')
+                        # 简单的JSON解析方法，处理多个连续的JSON对象
+                        json_objects = []
+                        temp_data = decoded_data
+                        
+                        while '{' in temp_data:
+                            # 找到第一个JSON对象
+                            start_idx = temp_data.index('{')
+                            depth = 1
+                            end_idx = start_idx + 1
+                            
+                            while end_idx < len(temp_data) and depth > 0:
+                                if temp_data[end_idx] == '{':
+                                    depth += 1
+                                elif temp_data[end_idx] == '}':
+                                    depth -= 1
+                                end_idx += 1
+                            
+                            if depth == 0:
+                                # 找到完整的JSON对象
+                                json_str = temp_data[start_idx:end_idx]
+                                json_objects.append(json_str)
+                                # 更新临时数据
+                                temp_data = temp_data[end_idx:]
+                            else:
+                                # 没有完整的JSON对象，继续接收
+                                break
+                        
+                        if not json_objects:
+                            break  # 没有完整的JSON对象，继续接收
+                        
+                        # 处理所有找到的JSON对象
+                        for json_str in json_objects:
+                            request = json.loads(json_str)
+                            request['username'] = self.username
+                            request_type = request.get('type')
 
-                        # 处理消息
-                        if request_type in ['message', 'text']:
-                            await self._process_message(request)
-                        elif request_type in ['file', 'image', 'video', 'audio']:
-                            # 将所有文件类型的消息都通过_process_file处理
-                            await self._process_file(request)
-                        elif request_type == 'private':  # 处理私聊消息
-                            await self._process_private_message(request)
-                        elif request_type == 'refresh_users':
-                            await self.connection_manager.message_manager.send_user_list_to_client(
-                                self.client_socket
-                            )
-                        elif request_type == 'get_history':
-                            # 处理获取历史消息请求
-                            from server.handlers.message_handler import MessageHandler
-                            message_handler = MessageHandler(self.connection_manager)
-                            response = await message_handler.handle_get_history(request)
-                            await self._send_response(response)
-                        elif request_type == 'get_private_history':
-                            # 处理获取私聊历史消息请求
-                            from server.handlers.message_handler import MessageHandler
-                            message_handler = MessageHandler(self.connection_manager)
-                            response = await message_handler.handle_get_private_history(request)
-                            await self._send_response(response)
-                        elif request_type == 'get_conversation':
-                            # 处理获取或创建会话ID请求
-                            from server.handlers.message_handler import MessageHandler
-                            message_handler = MessageHandler(self.connection_manager)
-                            response = await message_handler.handle_get_conversation(request)
-                            await self._send_response(response)
-                        elif request_type == 'logout':
-                            # 退出所有循环，触发清理
-                            return
-                        else:
-                            await self._send_response({
-                                'type': 'error',
-                                'success': False,
-                                'message': f'未知的消息类型: {request_type}'
-                            })
-
-                        # 解析成功后清空缓冲区
-                        buffer = b""
+                            # 处理消息
+                            if request_type in ['message', 'text']:
+                                await self._process_message(request)
+                            elif request_type in ['file', 'image', 'video', 'audio']:
+                                # 将所有文件类型的消息都通过_process_file处理
+                                await self._process_file(request)
+                            elif request_type == 'private':  # 处理私聊消息
+                                await self._process_private_message(request)
+                            elif request_type == 'refresh_users':
+                                await self.connection_manager.message_manager.send_user_list_to_client(
+                                    self.client_socket
+                                )
+                            elif request_type == 'get_history':
+                                # 处理获取历史消息请求
+                                from server.handlers.message_handler import MessageHandler
+                                message_handler = MessageHandler(self.connection_manager)
+                                response = await message_handler.handle_get_history(request)
+                                await self._send_response(response)
+                            elif request_type == 'get_private_history':
+                                # 处理获取私聊历史消息请求
+                                from server.handlers.message_handler import MessageHandler
+                                message_handler = MessageHandler(self.connection_manager)
+                                response = await message_handler.handle_get_private_history(request)
+                                await self._send_response(response)
+                            elif request_type == 'get_conversation':
+                                # 处理获取或创建会话ID请求
+                                from server.handlers.message_handler import MessageHandler
+                                message_handler = MessageHandler(self.connection_manager)
+                                response = await message_handler.handle_get_conversation(request)
+                                await self._send_response(response)
+                            elif request_type == 'logout':
+                                # 退出所有循环，触发清理
+                                return
+                            else:
+                                await self._send_response({
+                                    'type': 'error',
+                                    'success': False,
+                                    'message': f'未知的消息类型: {request_type}'
+                                })
+                        
+                        # 更新缓冲区
+                        buffer = temp_data.encode('utf-8')
+                        
                     except json.JSONDecodeError:
                         # 如果解析失败，说明数据不完整，继续接收
                         break
@@ -358,7 +458,9 @@ class ClientHandler:
     async def _send_response(self, response: Dict[str, Any]) -> None:
         """发送响应给客户端"""
         try:
-            self.client_socket.send(json.dumps(response).encode('utf-8'))
+            loop = asyncio.get_event_loop()
+            message = json.dumps(response).encode('utf-8')
+            await loop.sock_sendall(self.client_socket, message)
         except Exception as e:
             log.error(f"发送响应失败: {e}")
 

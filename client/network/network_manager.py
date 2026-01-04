@@ -51,9 +51,12 @@ class NetworkThread(QThread):
         try:
             # 创建TCP连接
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # 设置连接超时
             self.client_socket.settimeout(10)
             # 连接到服务器
             self.client_socket.connect((self.server_host, self.server_port))
+            # 连接成功后设置为非阻塞模式
+            self.client_socket.setblocking(False)
             
             self.running = True
             self.connection_status.emit(True, "连接成功")
@@ -66,7 +69,7 @@ class NetworkThread(QThread):
                         for data in datas:
                             self.handle_message(data)
                     else:
-                        # 没有数据，可能是连接断开
+                        # 没有完整的JSON对象或没有数据可接收，继续等待
                         # 添加延迟以避免空循环占用CPU
                         time.sleep(0.01)
                 except socket.timeout:
@@ -77,7 +80,10 @@ class NetworkThread(QThread):
                     self.connection_status.emit(False, "连接被服务器重置")
                     break
                 except OSError as e:
-                    # 套接字错误
+                    # 非阻塞模式下没有数据是正常的
+                    if e.errno in (10035, 11):  # WSAEWOULDBLOCK or EAGAIN
+                        time.sleep(0.01)
+                        continue
                     self.connection_status.emit(False, f"套接字错误: {str(e)}")
                     break
                 except Exception as e:
@@ -195,6 +201,21 @@ class NetworkThread(QThread):
             content_type = msg_type
             timestamp = data.get('timestamp', time.time())
             
+            # 过滤掉自己发送的公共消息，避免重复显示（因为客户端已经有本地回显）
+            if username == self.username:
+                # 对于文件类型消息，需要特殊处理，因为可能有file_data需要保存
+                if content_type in ['image', 'video', 'audio', 'file']:
+                    file_data = data.get('data', '')
+                    filename = data.get('filename', '')
+                    if file_data and filename:
+                        # 保存文件，因为本地回显时可能还没有保存文件到本地
+                        file_path = self.save_file(filename, file_data)
+                        if file_path:
+                            # 发送文件接收信号
+                            self.file_received.emit(filename, file_path)
+                log.debug(f"网络层过滤掉自己发送的公共消息: {content[:20]}...")
+                return
+            
             # 确保timestamp是数值类型
             if isinstance(timestamp, str):
                 try:
@@ -283,22 +304,6 @@ class NetworkThread(QThread):
             # 只发送系统消息VO对象，不要同时发送系统消息信号，避免重复
             self.message_received.emit(message_vo)
             
-        elif msg_type == 'file':
-            filename = data.get('filename', '')
-            file_data = data.get('data', '')
-            # 确保file_size是整数类型
-            file_size = data.get('size', 0)
-            if isinstance(file_size, str):
-                try:
-                    file_size = int(file_size)
-                except ValueError:
-                    file_size = 0
-            
-            # 保存文件
-            file_path = self.save_file(filename, file_data)
-            if file_path:
-                self.file_received.emit(filename, file_path)
-                
         elif msg_type == 'login_success':
             self.username = data.get('username', '')
             # 设置连接状态为已连接
@@ -628,16 +633,31 @@ class NetworkThread(QThread):
             file_vo = FileVO(
                 file_id="",  # 会在服务端生成
                 file_name=filename,
-                file_url="",  # 会在服务端生成
+                file_url=file_path,  # 使用本地文件路径进行回显
                 file_type=file_type,
                 file_size=len(file_data),  # 确保是整数类型
                 created_at=datetime.now()
             )
             
+            # 本地回显：在发送到服务器之前，先在本地显示文件
+            message_vo = MessageVO(
+                message_id="",  # 会在服务端生成
+                user_id="",
+                username=self.username,
+                content_type=file_type,
+                content="",  # 文件消息的内容为空
+                file_vo=file_vo,
+                created_at=datetime.now()
+            )
+            
+            # 发送文件消息到UI层显示
+            self.message_received.emit(message_vo)
+            
             # 将VO对象转换为字典进行传输
             data = {
                 'type': file_type,  # 根据文件类型发送不同类型
                 'username': self.username,  # 添加用户名信息
+                'content_type': file_type,  # 添加content_type字段，确保服务器正确识别消息类型
                 'filename': filename,  # 服务器期望的字段名
                 'data': base64.b64encode(file_data).decode('utf-8'),  # 使用base64编码
                 'size': len(file_data)  # 确保是整数类型
@@ -678,21 +698,31 @@ class NetworkThread(QThread):
         else:
             log.debug(f"NetworkThread.get_history_messages: client_socket或running条件不满足，无法发送请求")
     
-    def receive_data(self) -> Optional[list]:
+    def receive_data(self) -> list:
         """从服务器接收数据"""
+        results = []
         if self.client_socket and self.running:
             try:
                 # 接收更多数据
-                chunk = self.client_socket.recv(self.buffer_size)
-                if not chunk:
-                    # 连接已关闭
-                    return None
-                    
-                self._recv_buffer += chunk
+                try:
+                    chunk = self.client_socket.recv(self.buffer_size)
+                    if chunk:
+                        self._recv_buffer += chunk
+                except socket.timeout:
+                    # 超时是正常的，继续下一次循环
+                    pass
+                except OSError as e:
+                    # 非阻塞模式下没有数据可接收
+                    if e.errno not in (10035, 11):  # WSAEWOULDBLOCK or EAGAIN
+                        # 套接字错误，可能是连接已关闭
+                        if e.errno == 10038:  # 在一个非套接字上尝试了一个操作
+                            self.connection_status.emit(False, "连接已断开")
+                            self.running = False
+                        else:
+                            print(f"套接字错误: {e}")
                 
-                # 尝试解析缓冲区中的所有完整JSON对象
-                results = []
-                while True:
+                # 尝试解析缓冲区中的所有完整JSON对象 - 即使接收数据时遇到异常，也会执行这部分
+                while self._recv_buffer:
                     try:
                         # 尝试解析当前缓冲区中的数据
                         decoded_data = self._recv_buffer.decode('utf-8')
@@ -708,33 +738,74 @@ class NetworkThread(QThread):
                         else:
                             # 没有找到完整的JSON对象，退出循环
                             break
-                    except UnicodeDecodeError:
-                        # 如果解码失败，继续接收更多数据
-                        break
+                    except UnicodeDecodeError as e:
+                        # 处理部分UTF-8字符的情况
+                        # 检查错误位置，可能需要更多数据来完成UTF-8字符
+                        error_pos = e.start
+                        # 如果错误位置在缓冲区末尾，可能是因为我们只收到了部分UTF-8字符
+                        if error_pos == len(self._recv_buffer):
+                            # 等待更多数据
+                            break
+                        else:
+                            # 否则，缓冲区中可能包含损坏的数据
+                            print(f"Unicode解码失败: {e}")
+                            # 跳过损坏的字节，尝试从下一个位置重新开始
+                            self._recv_buffer = self._recv_buffer[error_pos + 1:]
                     except Exception as e:
                         print(f"JSON解析失败: {e}")
-                        # 清空缓冲区以避免持续错误
-                        self._recv_buffer = b""
+                        # 只清除当前无法解析的部分，保留剩余数据
+                        # 找到最后一个有效的JSON对象结束位置
+                        try:
+                            # 尝试从后往前找到一个有效的JSON结束标记
+                            end_pos = len(self._recv_buffer) - 1
+                            while end_pos >= 0:
+                                if self._recv_buffer[end_pos] == ord('}'):
+                                    # 检查这个位置是否是一个完整JSON对象的结束
+                                    temp_buffer = self._recv_buffer[:end_pos+1]
+                                    try:
+                                        temp_data = temp_buffer.decode('utf-8')
+                                        obj, index = self._extract_json_object(temp_data)
+                                        if obj is not None and index == len(temp_data):
+                                            # 找到一个完整的JSON对象，保留它
+                                            self._recv_buffer = temp_buffer
+                                            break
+                                    except:
+                                        pass
+                                end_pos -= 1
+                            else:
+                                # 没有找到有效的JSON对象，清空缓冲区
+                                self._recv_buffer = b""
+                        except:
+                            # 发生异常时，清空缓冲区
+                            self._recv_buffer = b""
                         break
-                
-                return results if results else None
-                    
-            except socket.timeout:
-                # 超时是正常的，继续下一次循环
-                pass
-            except OSError as e:
-                # 套接字错误，可能是连接已关闭
-                if e.errno == 10038:  # 在一个非套接字上尝试了一个操作
-                    self.connection_status.emit(False, "连接已断开")
-                    self.running = False
-                else:
-                    print(f"套接字错误: {e}")
-                return None
             except Exception as e:
                 print(f"接收数据失败: {e}")
-                # 清空缓冲区以避免持续错误
-                self._recv_buffer = b""
-        return None
+                # 只清除当前无法解析的部分，保留剩余数据
+                try:
+                    # 尝试从后往前找到一个有效的JSON对象结束位置
+                    end_pos = len(self._recv_buffer) - 1
+                    while end_pos >= 0:
+                        if self._recv_buffer[end_pos] == ord('}'):
+                            # 检查这个位置是否是一个完整JSON对象的结束
+                            temp_buffer = self._recv_buffer[:end_pos+1]
+                            try:
+                                temp_data = temp_buffer.decode('utf-8')
+                                obj, index = self._extract_json_object(temp_data)
+                                if obj is not None and index == len(temp_data):
+                                    # 找到一个完整的JSON对象，保留它
+                                    self._recv_buffer = temp_buffer
+                                    break
+                            except:
+                                pass
+                        end_pos -= 1
+                    else:
+                        # 没有找到有效的JSON对象，清空缓冲区
+                        self._recv_buffer = b""
+                except:
+                    # 发生异常时，清空缓冲区
+                    self._recv_buffer = b""
+        return results
     
     def _extract_json_object(self, text):
         """从文本中提取第一个完整的JSON对象"""

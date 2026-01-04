@@ -174,6 +174,9 @@ class ChatController(QObject):
             self.system_message.emit("未连接到服务器")
             return False
 
+        # 不再发送本地回显，因为network_manager.send_file会处理
+        # 这样可以避免重复显示文件
+
         success = self.network_manager.send_file(file_path)
         if success:
             self.file_sent.emit(os.path.basename(file_path))
@@ -187,6 +190,9 @@ class ChatController(QObject):
         if not self.network_manager.is_connected():
             self.system_message.emit("未连接到服务器")
             return False
+
+        # 不再发送本地回显，因为network_manager.send_file会处理
+        # 这样可以避免重复显示语音
 
         success = self.network_manager.send_file(file_path)  # 复用send_file方法
         if success:
@@ -208,29 +214,8 @@ class ChatController(QObject):
         filename = os.path.basename(file_path)
         log.info(f"准备发送图片：{filename}")
 
-        # 创建图片消息VO对象用于本地回显
-        file_vo = FileVO(
-            file_id="",
-            file_name=filename,
-            file_url=file_path,  # 使用本地文件路径
-            file_type="image",
-            file_size=os.path.getsize(file_path),
-            created_at=datetime.now()
-        )
-
-        message_vo = MessageVO(
-            message_id="",
-            user_id="",
-            username=self.current_user,
-            content_type="image",
-            content=filename,
-            file_vo=file_vo,
-            created_at=datetime.now()
-        )
-
-        # 立即在界面显示本地回显
-        log.debug(f"发送本地图片回显：{filename}")
-        self.message_sent.emit(message_vo)
+        # 不再发送本地回显，因为network_manager.send_file会处理
+        # 这样可以避免重复显示图片
 
         log.debug(f"调用network_manager.send_file发送图片：{filename}")
         success = self.network_manager.send_file(file_path)  # 复用send_file方法
@@ -241,7 +226,6 @@ class ChatController(QObject):
         else:
             log.error(f"图片发送失败：{filename}")
             self.system_message.emit("图片发送失败")
-            # 如果发送失败，可能需要从界面移除消息，但这里简单提示用户
 
         return success
 
@@ -250,6 +234,9 @@ class ChatController(QObject):
         if not self.network_manager.is_connected():
             self.system_message.emit("未连接到服务器")
             return False
+
+        # 不再发送本地回显，因为network_manager.send_file会处理
+        # 这样可以避免重复显示视频
 
         success = self.network_manager.send_file(file_path)  # 复用send_file方法
         if success:

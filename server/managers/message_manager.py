@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import datetime
 import base64
+import asyncio
 
 from sqlalchemy import select
 from common.log import server_log as log
@@ -144,8 +145,10 @@ class MessageManager:
             receiver_client = self.connection_manager.get_client(receiver_username)
             if receiver_client:
                 try:
+                    loop = asyncio.get_event_loop()
+                    message_data = json.dumps(private_message).encode('utf-8')
                     # 发送私聊消息给接收者
-                    receiver_client.socket.send(json.dumps(private_message).encode('utf-8'))
+                    await loop.sock_sendall(receiver_client.socket, message_data)
                     log.info(f"私聊消息已发送给接收者: {sender_username} -> {receiver_username}")
                 except Exception as e:
                     log.error(f"发送私聊消息给 {receiver_username} 失败: {e}")
@@ -156,20 +159,8 @@ class MessageManager:
         else:
             log.info(f"接收者 {receiver_username} 不在线，消息已保存到数据库")
         
-        # 也发送消息给发送者，以便发送者能看到自己发送的消息
-        if self.connection_manager.is_client_connected(sender_username):
-            sender_client = self.connection_manager.get_client(sender_username)
-            if sender_client:
-                try:
-                    # 发送私聊消息给发送者
-                    sender_client.socket.send(json.dumps(private_message).encode('utf-8'))
-                    log.info(f"私聊消息已回传给发送者: {sender_username}")
-                except Exception as e:
-                    log.error(f"发送私聊消息给发送者 {sender_username} 失败: {e}")
-                    return False
-            else:
-                log.error(f"无法找到发送者 {sender_username} 的客户端信息")
-                return False
+        # 不再发送消息给发送者，因为客户端会进行本地回显
+        # 这样可以避免消息重复显示
         
         return True  # 消息已处理完成
 
@@ -248,13 +239,17 @@ class MessageManager:
         }
 
         try:
-            client_socket.send(json.dumps(user_list_message).encode('utf-8'))
+            loop = asyncio.get_event_loop()
+            message_data = json.dumps(user_list_message).encode('utf-8')
+            await loop.sock_sendall(client_socket, message_data)
         except Exception as e:
             log.error(f"发送用户列表失败: {e}")
 
     async def _broadcast_to_clients(self, message: dict, exclude_socket=None) -> None:
         """广播消息给所有客户端"""
         disconnected_clients: List[str] = []
+        loop = asyncio.get_event_loop()
+        message_data = json.dumps(message).encode('utf-8')
 
         for username, client in self.connection_manager.clients.items():
             # 如果指定了排除的socket，则跳过该客户端
@@ -262,7 +257,7 @@ class MessageManager:
                 continue
             
             try:
-                client.socket.send(json.dumps(message).encode('utf-8'))
+                await loop.sock_sendall(client.socket, message_data)
             except Exception as e:
                 log.error(f"发送消息给用户 {username} 失败: {e}")
                 disconnected_clients.append(username)

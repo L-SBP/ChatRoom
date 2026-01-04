@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -19,11 +20,11 @@ class PgHelper:
             cls._engine = create_async_engine(
                 url=URL.create(
                     drivername='postgresql+asyncpg',
-                    username='user',
-                    password='user_secure_2025',
-                    host='localhost',
-                    port=5432,
-                    database='ChatRoom'
+                    username=os.environ.get('DB_USER', 'user'),
+                    password=os.environ.get('DB_PASSWORD', 'user_secure_2025'),
+                    host=os.environ.get('DB_HOST', 'localhost'),
+                    port=int(os.environ.get('DB_PORT', 5432)),
+                    database=os.environ.get('DB_NAME', 'ChatRoom')
                 ),
                 echo=True,
                 pool_size=10,              # 连接池大小
